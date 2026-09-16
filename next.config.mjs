@@ -1,0 +1,21 @@
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // better-sqlite3 是原生模块，必须留给 Node 运行时自行 require
+  serverExternalPackages: ['better-sqlite3'],
+  eslint: { ignoreDuringBuilds: true },
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          // 允许被微信小程序 web-view 等容器嵌入
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+        ],
+      },
+    ];
+  },
+};
+
+export default nextConfig;

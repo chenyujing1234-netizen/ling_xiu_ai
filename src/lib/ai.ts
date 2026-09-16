@@ -1,0 +1,263 @@
+/**
+ * AI 适配层：走 OpenAI 兼容协议（当前接阿里百炼 tokenplan）。
+ * 换供应商只需改 .env 的 AI_BASE_URL / AI_API_KEY / AI_MODEL。
+ *
+ * 三个踩过的坑：
+ * 1) 这批模型都是推理模型：思考过程在 reasoning_content，答案在 content。
+ * 2) **reasoning 也算 completion tokens**，实测一次要烧 1000-2800 token。
+ *    max_tokens 给小了会把答案挤掉，返回被截断的 JSON。所以下限给到 4000。
+ * 3) 单次调用 20-70 秒是常态，超时必须给足，否则永远在跑降级引擎。
+ */
+
+const DEFAULT_MAX_TOKENS = 4000;
+const DEFAULT_TIMEOUT_MS = 210_000;
+
+export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
+
+const BASE_URL = () => (process.env.AI_BASE_URL || '').replace(/\/$/, '');
+const API_KEY = () => process.env.AI_API_KEY || '';
+
+export const MODELS = {
+  main: () => process.env.AI_MODEL || 'qwen3.8-max',
+  fast: () => process.env.AI_MODEL_FAST || process.env.AI_MODEL || 'qwen3.8-flash',
+  image: () => process.env.AI_MODEL_IMAGE || '',
+  audio: () => process.env.AI_MODEL_AUDIO || '',
+};
+
+export function aiConfigured(): boolean {
+  return Boolean(BASE_URL() && API_KEY());
+}
+
+export class AiError extends Error {}
+
+type ChatOptions = {
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+  json?: boolean;
+  timeoutMs?: number;
+};
+
+export async function chat(messages: ChatMessage[], opts: ChatOptions = {}): Promise<string> {
+  if (!aiConfigured()) throw new AiError('AI 未配置');
+
+  const body: Record<string, unknown> = {
+    model: opts.model ?? MODELS.main(),
+    messages,
+    temperature: opts.temperature ?? 0.7,
+    // 要为 reasoning 留出预算，否则答案会被思考挤掉
+    max_tokens: Math.max(opts.maxTokens ?? DEFAULT_MAX_TOKENS, DEFAULT_MAX_TOKENS),
+  };
+  if (opts.json) body.response_format = { type: 'json_object' };
+
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${BASE_URL()}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${API_KEY()}`,
+      },
+      body: JSON.stringify(body),
+      signal: ctl.signal,
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new AiError(`AI 请求失败 ${res.status}: ${detail.slice(0, 300)}`);
+    }
+    const data = await res.json();
+    const choice = data?.choices?.[0];
+    const msg = choice?.message;
+    const content: string = msg?.content?.trim() || '';
+
+    // 被 max_tokens 截断时一律报错。截断的 JSON 仍可能被"最后一个花括号"
+    // 兜底解析成看似合法但内容缺失的对象（例如四个评分维度只剩一个），
+    // 那比直接失败更糟 —— 会得到一个错的分数却毫无察觉。
+    if (choice?.finish_reason === 'length') {
+      throw new AiError('AI 输出被长度限制截断，请提高 max_tokens');
+    }
+    if (content) return content;
+
+    // 极少数情况答案落在 reasoning_content 里，兜一下
+    const reasoning: string = msg?.reasoning_content?.trim() || '';
+    if (reasoning) return reasoning;
+    throw new AiError('AI 返回内容为空');
+  } catch (err) {
+    if (err instanceof AiError) throw err;
+    if ((err as Error).name === 'AbortError') throw new AiError('AI 请求超时');
+    throw new AiError(`AI 调用异常: ${(err as Error).message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export type StreamEvent =
+  | { type: 'thinking' }
+  | { type: 'delta'; text: string }
+  | { type: 'done'; text: string };
+
+/**
+ * 流式对话。引导揭晓这一步用主模型要 1-2 分钟，静等太难受，
+ * 所以逐字推给前端。推理模型会先吐 reasoning_content —— 那部分不展示原文，
+ * 只发一个 thinking 信号让界面显示"正在默想"。
+ */
+export async function* chatStream(
+  messages: ChatMessage[],
+  opts: ChatOptions = {},
+): AsyncGenerator<StreamEvent> {
+  if (!aiConfigured()) throw new AiError('AI 未配置');
+
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  let full = '';
+
+  try {
+    const res = await fetch(`${BASE_URL()}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${API_KEY()}`,
+      },
+      body: JSON.stringify({
+        model: opts.model ?? MODELS.main(),
+        messages,
+        temperature: opts.temperature ?? 0.7,
+        max_tokens: Math.max(opts.maxTokens ?? DEFAULT_MAX_TOKENS, DEFAULT_MAX_TOKENS),
+        stream: true,
+      }),
+      signal: ctl.signal,
+    });
+    if (!res.ok || !res.body) {
+      const detail = await res.text().catch(() => '');
+      throw new AiError(`AI 流式请求失败 ${res.status}: ${detail.slice(0, 200)}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let thinkingSent = false;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // SSE 以空行分隔事件；最后一段可能不完整，留在 buffer 里
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) continue;
+        const payload = trimmed.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+
+        try {
+          const delta = JSON.parse(payload)?.choices?.[0]?.delta;
+          if (delta?.reasoning_content && !thinkingSent) {
+            thinkingSent = true;
+            yield { type: 'thinking' };
+          }
+          const text: string = delta?.content ?? '';
+          if (text) {
+            full += text;
+            yield { type: 'delta', text };
+          }
+        } catch {
+          /* 跳过畸形分片 */
+        }
+      }
+    }
+
+    if (!full.trim()) throw new AiError('AI 未返回内容');
+    yield { type: 'done', text: full };
+  } catch (err) {
+    if (err instanceof AiError) throw err;
+    if ((err as Error).name === 'AbortError') throw new AiError('AI 请求超时');
+    throw new AiError(`AI 流式调用异常: ${(err as Error).message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** 从可能带 ```json 包裹或前后有解释文字的回复里提取 JSON */
+export function extractJson<T>(raw: string): T {
+  let s = raw.trim();
+  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) s = fence[1].trim();
+  try {
+    return JSON.parse(s) as T;
+  } catch {
+    // 退一步：截取第一个 { 或 [ 到最后一个配对括号
+    const start = s.search(/[{[]/);
+    const end = Math.max(s.lastIndexOf('}'), s.lastIndexOf(']'));
+    if (start >= 0 && end > start) {
+      return JSON.parse(s.slice(start, end + 1)) as T;
+    }
+    throw new AiError(`无法解析 AI 返回的 JSON: ${raw.slice(0, 200)}`);
+  }
+}
+
+/** 结构化输出：要求模型只吐 JSON，并做一次解析兜底 */
+export async function chatJson<T>(messages: ChatMessage[], opts: ChatOptions = {}): Promise<T> {
+  const raw = await chat(messages, { ...opts, json: true, temperature: opts.temperature ?? 0.4 });
+  return extractJson<T>(raw);
+}
+
+/** 文生图：生成知识图谱/思维导图的意境配图。返回图片 URL；未配置则返回 null */
+export async function generateImage(prompt: string): Promise<string | null> {
+  const model = MODELS.image();
+  if (!model || !aiConfigured()) return null;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 120_000);
+  try {
+    const res = await fetch(`${BASE_URL()}/images/generations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${API_KEY()}`,
+      },
+      body: JSON.stringify({ model, prompt, n: 1, size: '1024*1024' }),
+      signal: ctl.signal,
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.data?.[0]?.url ?? data?.data?.[0]?.b64_json ?? null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * 录音笔记转写。多数 OpenAI 兼容端点提供 /audio/transcriptions；
+ * 若供应商不支持，返回 null，录音仍然保留，只是没有文字稿。
+ */
+export async function transcribe(file: Blob, filename = 'note.webm'): Promise<string | null> {
+  if (!aiConfigured()) return null;
+  const model = MODELS.audio();
+  if (!model) return null;
+  const form = new FormData();
+  form.append('file', file, filename);
+  form.append('model', model);
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 120_000);
+  try {
+    const res = await fetch(`${BASE_URL()}/audio/transcriptions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${API_KEY()}` },
+      body: form,
+      signal: ctl.signal,
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const text = data?.text ?? data?.output?.text ?? null;
+    return typeof text === 'string' && text.trim() ? text.trim() : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}

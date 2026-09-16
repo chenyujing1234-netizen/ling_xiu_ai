@@ -1,0 +1,22 @@
+node_modules/
+.next/
+out/
+build/
+next-env.d.ts
+*.tsbuildinfo
+
+# 密钥
+.env
+.env.local
+.env*.local
+
+# 运行期数据（数据库、圣经原始数据、用户上传的录音与手写图）
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/raw/
+# 录音与手写笔记是用户的私密内容，绝不能进版本库
+data/uploads/
+
+.DS_Store
+*.log

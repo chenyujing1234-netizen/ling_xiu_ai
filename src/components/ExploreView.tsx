@@ -1,0 +1,438 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { api } from '@/lib/client';
+import KnowledgeGraph, { type GraphData } from './KnowledgeGraph';
+import Mindmap, { type MindmapNode } from './Mindmap';
+import Waiting from './Waiting';
+
+type Elements = {
+  people: { name: string; role: string }[];
+  times: { label: string; note: string }[];
+  places: { name: string; note: string }[];
+  plot: string[];
+  climax: { verse: number; why: string };
+  background: string;
+  contemporary: { scripture: string[]; world: string[] };
+  thesis: string | null;
+  reflection: string[] | null;
+};
+
+type BookBrief = { id: number; name: string; chapters: number };
+type Resource = {
+  id: number;
+  title: string;
+  speaker: string | null;
+  source: string | null;
+  url: string;
+  verse_start: number;
+  verse_end: number;
+  start_sec: number | null;
+  note: string | null;
+};
+
+type Tab = 'elements' | 'graph' | 'mindmap' | 'image' | 'sermon';
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'elements', label: '要素梳理' },
+  { key: 'graph', label: '知识图谱' },
+  { key: 'mindmap', label: '思维导图' },
+  { key: 'image', label: '意境配图' },
+  { key: 'sermon', label: '讲道视频' },
+];
+
+export default function ExploreView({
+  books,
+  initialBook,
+  initialChapter,
+}: {
+  books: BookBrief[];
+  initialBook: number;
+  initialChapter: number;
+}) {
+  const [book, setBook] = useState(initialBook);
+  const [chapter, setChapter] = useState(initialChapter);
+  const [tab, setTab] = useState<Tab>('elements');
+
+  const bookMeta = books.find((b) => b.id === book);
+  const label = `${bookMeta?.name ?? ''}${chapter}章`;
+
+  // 换章时把超出范围的章号收回来
+  useEffect(() => {
+    if (bookMeta && chapter > bookMeta.chapters) setChapter(1);
+  }, [bookMeta, chapter]);
+
+  return (
+    <div>
+      <header className="sticky top-0 z-30 border-b border-line bg-paper/95 px-4 py-3 backdrop-blur">
+        <h1 className="text-[17px] font-semibold">发现 · {label}</h1>
+        <div className="mt-2 flex gap-2">
+          <select
+            className="field flex-1 py-2 text-sm"
+            value={book}
+            onChange={(e) => {
+              setBook(Number(e.target.value));
+              setChapter(1);
+            }}
+          >
+            {books.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+          <select
+            className="field w-24 py-2 text-sm"
+            value={chapter}
+            onChange={(e) => setChapter(Number(e.target.value))}
+          >
+            {Array.from({ length: bookMeta?.chapters ?? 1 }, (_, i) => i + 1).map((c) => (
+              <option key={c} value={c}>
+                {c} 章
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="mt-2 flex gap-1 overflow-x-auto no-bar">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`shrink-0 rounded-lg px-3 py-1.5 text-xs transition ${
+                tab === t.key ? 'bg-brand-500 font-medium text-white' : 'border border-line text-muted'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      <div className="px-4 py-4">
+        {tab === 'elements' && <ElementsPanel book={book} chapter={chapter} label={label} />}
+        {tab === 'graph' && <GraphPanel book={book} chapter={chapter} label={label} />}
+        {tab === 'mindmap' && <MindmapPanel book={book} chapter={chapter} label={label} />}
+        {tab === 'image' && <ImagePanel book={book} chapter={chapter} label={label} />}
+        {tab === 'sermon' && <SermonPanel book={book} chapter={chapter} />}
+      </div>
+    </div>
+  );
+}
+
+// ---------- 通用的"按需生成"容器 ----------
+
+function LazyPanel<T>({
+  kind,
+  book,
+  chapter,
+  actionLabel,
+  hint,
+  children,
+}: {
+  kind: string;
+  book: number;
+  chapter: number;
+  actionLabel: string;
+  hint: string;
+  children: (data: T, extra: { unlocked?: boolean; lockedHint?: string }) => React.ReactNode;
+}) {
+  const [data, setData] = useState<T | null>(null);
+  const [extra, setExtra] = useState<{ unlocked?: boolean; lockedHint?: string }>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await api<{ data: T; unlocked?: boolean; lockedHint?: string }>(
+        `/api/insights?kind=${kind}&book=${book}&chapter=${chapter}`,
+      );
+      setData(res.data);
+      setExtra({ unlocked: res.unlocked, lockedHint: res.lockedHint });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, [kind, book, chapter]);
+
+  // 切换经卷/章节时清空，避免显示上一章的内容
+  useEffect(() => {
+    setData(null);
+    setError('');
+  }, [book, chapter]);
+
+  if (data) return <>{children(data, extra)}</>;
+
+  if (busy) {
+    return (
+      <div className="rounded-2xl border border-dashed border-line px-5">
+        <Waiting text="正在生成…" expect="通常 20-60 秒，生成后会缓存" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-dashed border-line px-5 py-10 text-center">
+      <p className="mb-4 text-sm leading-relaxed text-muted">{hint}</p>
+      {error && <p className="mb-3 text-sm text-accent">{error}</p>}
+      <button className="btn-primary" onClick={load}>
+        {actionLabel}
+      </button>
+    </div>
+  );
+}
+
+// ---------- 要素梳理 ----------
+
+function ElementsPanel({ book, chapter, label }: { book: number; chapter: number; label: string }) {
+  return (
+    <LazyPanel<Elements>
+      kind="elements"
+      book={book}
+      chapter={chapter}
+      actionLabel="梳理这一章"
+      hint="把这一章的人物、时间、地点、情节、高潮、时代背景和同期事件整理出来，帮你记住读过什么。"
+    >
+      {(el, extra) => (
+        <div className="space-y-3">
+          {el.people?.length > 0 && (
+            <Card title="人物">
+              <ul className="space-y-1.5">
+                {el.people.map((p, i) => (
+                  <li key={i} className="text-[14px] leading-relaxed">
+                    <span className="font-medium">{p.name}</span>
+                    <span className="text-muted"> — {p.role}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          {el.times?.length > 0 && (
+            <Card title="时间">
+              <ul className="space-y-1.5">
+                {el.times.map((t, i) => (
+                  <li key={i} className="text-[14px] leading-relaxed">
+                    <span className="font-medium">{t.label}</span>
+                    {t.note && <span className="text-muted"> — {t.note}</span>}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          {el.places?.length > 0 && (
+            <Card title="地点">
+              <ul className="space-y-1.5">
+                {el.places.map((p, i) => (
+                  <li key={i} className="text-[14px] leading-relaxed">
+                    <span className="font-medium">{p.name}</span>
+                    {p.note && <span className="text-muted"> — {p.note}</span>}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          {el.plot?.length > 0 && (
+            <Card title="情节推进">
+              <ol className="space-y-2">
+                {el.plot.map((step, i) => (
+                  <li key={i} className="flex gap-2.5 text-[14px] leading-relaxed">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] text-brand-700">
+                      {i + 1}
+                    </span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
+            </Card>
+          )}
+
+          {el.climax?.why && (
+            <Card title={`高潮转折${el.climax.verse ? ` · 第 ${el.climax.verse} 节` : ''}`}>
+              <p className="text-[14px] leading-relaxed">{el.climax.why}</p>
+            </Card>
+          )}
+
+          {el.background && (
+            <Card title="时代背景">
+              <p className="text-[14px] leading-relaxed">{el.background}</p>
+            </Card>
+          )}
+
+          {(el.contemporary?.scripture?.length || el.contemporary?.world?.length) && (
+            <Card title="同时期发生了什么">
+              {el.contemporary.scripture?.length > 0 && (
+                <>
+                  <p className="label mb-1.5">圣经内</p>
+                  <ul className="mb-3 space-y-1">
+                    {el.contemporary.scripture.map((s, i) => (
+                      <li key={i} className="text-[13.5px] leading-relaxed text-ink/90">· {s}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {el.contemporary.world?.length > 0 && (
+                <>
+                  <p className="label mb-1.5">世界史 / 中国</p>
+                  <ul className="space-y-1">
+                    {el.contemporary.world.map((s, i) => (
+                      <li key={i} className="text-[13.5px] leading-relaxed text-ink/90">· {s}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </Card>
+          )}
+
+          {/* 要义与反思：未解锁则显示锁（R-D1） */}
+          {el.thesis ? (
+            <Card title="核心要义">
+              <p className="text-[14.5px] leading-relaxed">{el.thesis}</p>
+            </Card>
+          ) : (
+            <div className="card border-dashed px-4 py-5 text-center">
+              <p className="mb-1 text-2xl">🔒</p>
+              <p className="text-[13.5px] leading-relaxed text-muted">
+                {extra.lockedHint ?? '核心要义需要你先自己思考后才揭晓'}
+              </p>
+              <Link href={`/devotion/start?book=${book}&chapter=${chapter}`} className="btn-ghost mt-3">
+                开始灵修去解锁
+              </Link>
+            </div>
+          )}
+
+          {el.reflection && el.reflection.length > 0 && (
+            <Card title="照见的现实">
+              <ul className="space-y-1.5">
+                {el.reflection.map((r, i) => (
+                  <li key={i} className="text-[14px] leading-relaxed">· {r}</li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          <p className="pt-1 text-center text-xs text-muted">{label} · 结果已缓存，再看不额外消耗</p>
+        </div>
+      )}
+    </LazyPanel>
+  );
+}
+
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="card px-4 py-3.5">
+      <p className="label mb-2">{title}</p>
+      {children}
+    </section>
+  );
+}
+
+// ---------- 图谱 / 导图 / 配图 / 讲道 ----------
+
+function GraphPanel({ book, chapter, label }: { book: number; chapter: number; label: string }) {
+  return (
+    <LazyPanel<GraphData>
+      kind="graph"
+      book={book}
+      chapter={chapter}
+      actionLabel="生成知识图谱"
+      hint="把这一章的人物、地点、事件和主题的关系画成一张图，可以导出图片保存。"
+    >
+      {(data) => <KnowledgeGraph data={data} title={label} />}
+    </LazyPanel>
+  );
+}
+
+function MindmapPanel({ book, chapter, label }: { book: number; chapter: number; label: string }) {
+  return (
+    <LazyPanel<MindmapNode>
+      kind="mindmap"
+      book={book}
+      chapter={chapter}
+      actionLabel="生成思维导图"
+      hint="把这一章的脉络整理成思维导图，一眼看清结构，可导出图片。"
+    >
+      {(data) => <Mindmap data={data} title={label} />}
+    </LazyPanel>
+  );
+}
+
+function ImagePanel({ book, chapter, label }: { book: number; chapter: number; label: string }) {
+  return (
+    <LazyPanel<{ url: string | null }>
+      kind="image"
+      book={book}
+      chapter={chapter}
+      actionLabel="生成意境配图"
+      hint="根据这一章的场景生成一张意境画面，帮助记忆。生成需要较长时间，请耐心等待。"
+    >
+      {(data) =>
+        data.url ? (
+          <figure>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={data.url} alt={`${label} 意境配图`} className="w-full rounded-2xl border border-line" />
+            <figcaption className="mt-2 text-center text-xs text-muted">
+              {label} · AI 生成的意境画面，非历史考据插图
+            </figcaption>
+          </figure>
+        ) : (
+          <p className="card px-4 py-6 text-center text-sm text-muted">
+            未配置文生图模型，或本次生成失败。可在 .env 设置 AI_MODEL_IMAGE 后重试。
+          </p>
+        )
+      }
+    </LazyPanel>
+  );
+}
+
+function SermonPanel({ book, chapter }: { book: number; chapter: number }) {
+  const [items, setItems] = useState<Resource[] | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setItems(null);
+    api<{ resources: Resource[] }>(`/api/resources?book=${book}&chapter=${chapter}`)
+      .then((r) => setItems(r.resources))
+      .catch((e) => setError((e as Error).message));
+  }, [book, chapter]);
+
+  if (error) return <p className="text-sm text-accent">{error}</p>;
+  if (!items) return <p className="py-10 text-center text-sm text-muted">加载中…</p>;
+
+  if (!items.length) {
+    return (
+      <div className="card px-4 py-8 text-center">
+        <p className="text-sm leading-relaxed text-muted">
+          这一章还没有挂讲道资源。
+          <br />
+          管理员可以在后台添加福音影视网、B站等讲道链接，
+          <br />
+          并指定经文范围与视频起止时间。
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <ul className="space-y-2">
+      {items.map((r) => (
+        <li key={r.id}>
+          <a href={r.url} target="_blank" rel="noreferrer" className="card block px-4 py-3.5 active:bg-brand-50">
+            <p className="text-[15px] font-medium">{r.title}</p>
+            <p className="mt-0.5 text-xs text-muted">
+              {[r.speaker, r.source].filter(Boolean).join(' · ')}
+              {r.verse_start ? ` · ${r.verse_start}${r.verse_end && r.verse_end !== r.verse_start ? `-${r.verse_end}` : ''}节` : ''}
+            </p>
+            {r.note && <p className="mt-1 text-xs leading-relaxed text-muted">{r.note}</p>}
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}

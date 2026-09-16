@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* 底部 Tab 高度 + iOS 安全区（R-G2） */
+  --tabbar-h: 56px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+
+html,
+body {
+  @apply bg-paper text-ink;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue',
+    sans-serif;
+}
+
+/* 主内容区避开底部 Tab */
+.page {
+  padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 16px);
+}
+
+/* 经文正文：衬线体 + 宽行距，长时间阅读友好 */
+.scripture {
+  @apply font-serifcn;
+  line-height: 2.05;
+  font-size: 17px;
+}
+
+/* 长按经文时禁止系统选择菜单弹出（R-G4） */
+.no-select {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl bg-card border border-line shadow-soft;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm
+           font-medium transition active:scale-[0.97] disabled:opacity-40 disabled:active:scale-100;
+  }
+  .btn-primary {
+    @apply btn bg-brand-500 text-white active:bg-brand-600;
+  }
+  .btn-ghost {
+    @apply btn border border-line bg-card text-ink;
+  }
+  .btn-quiet {
+    @apply btn text-muted;
+  }
+  .field {
+    @apply w-full rounded-xl border border-line bg-card px-3.5 py-3 text-[15px] text-ink
+           outline-none placeholder:text-muted/70 focus:border-brand-300;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-line bg-brand-50
+           px-2.5 py-1 text-xs text-brand-700;
+  }
+  .label {
+    @apply text-xs font-medium tracking-wide text-muted;
+  }
+  /* 底部弹出面板 */
+  .sheet {
+    @apply fixed inset-x-0 bottom-0 z-50 rounded-t-3xl bg-card shadow-sheet;
+    padding-bottom: calc(var(--safe-b) + 16px);
+    animation: sheet-up 0.24s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+/* 等待 AI 时的三点动效 */
+@keyframes dot-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+/* 录音时的呼吸动效 */
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(156, 91, 63, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 18px rgba(156, 91, 63, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(156, 91, 63, 0);
+  }
+}
+.recording {
+  animation: pulse-ring 1.4s infinite;
+}
+
+/* 隐藏滚动条但保留滚动 */
+.no-bar::-webkit-scrollbar {
+  display: none;
+}
+.no-bar {
+  scrollbar-width: none;
+}
