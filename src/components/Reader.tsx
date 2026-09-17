@@ -88,6 +88,12 @@ export default function Reader({
 
   function pressStart(v: Verse, e: React.PointerEvent) {
     if (!data) return;
+    if (e.pointerType !== 'touch') {
+      // 鼠标/触控板：接管指针，这样手稍微滑出这一行也不会被 pointerleave 打断；
+      // 同时阻止按住文本被当成拖拽或选择的起点
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      e.preventDefault();
+    }
     startPoint.current = { x: e.clientX, y: e.clientY };
     setPressing(v.verse);
     timer.current = setTimeout(() => {
@@ -105,11 +111,13 @@ export default function Reader({
   }
 
   function pressMove(e: React.PointerEvent) {
-    // 手指是在滚动而不是长按 —— 取消
     if (!startPoint.current) return;
+    // 触摸要灵敏地让位给页面滚动，容差就得小；但鼠标和触控笔没有滚动手势之争，
+    // 只需容忍手抖 —— 之前统一按 8px 判定，用鼠标或触控板按住时轻轻一滑长按就没了。
+    const slop = e.pointerType === 'touch' ? 10 : 30;
     const dx = Math.abs(e.clientX - startPoint.current.x);
     const dy = Math.abs(e.clientY - startPoint.current.y);
-    if (dx > 8 || dy > 8) pressCancel();
+    if (dx > slop || dy > slop) pressCancel();
   }
 
   function pressCancel() {

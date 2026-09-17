@@ -23,6 +23,22 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'context', label: '上下文' },
 ];
 
+/**
+ * 记住上次用的输入方式。
+ *
+ * 习惯录音的人几乎每次都录音，每打开一节都要先点一下"录音"很啰嗦，
+ * 所以直接停在上次用的那种，需要换随时点上面的页签。
+ * "上下文"是查看不是输入，不计入偏好。
+ */
+const PREF_KEY = 'lx_note_input';
+const INPUT_TABS: Tab[] = ['text', 'audio', 'hand'];
+
+function lastUsedInput(): Tab {
+  if (typeof window === 'undefined') return 'text';
+  const v = window.localStorage.getItem(PREF_KEY) as Tab | null;
+  return v && INPUT_TABS.includes(v) ? v : 'text';
+}
+
 export default function NoteSheet({
   target,
   devotionId,
@@ -34,7 +50,7 @@ export default function NoteSheet({
   onClose: () => void;
   onSaved?: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>('text');
+  const [tab, setTab] = useState<Tab>(lastUsedInput);
   const [text, setText] = useState('');
   const [godSpoke, setGodSpoke] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -42,6 +58,16 @@ export default function NoteSheet({
   const [toast, setToast] = useState('');
 
   const ref = `${target.bookName} ${target.chapter}:${target.verse}`;
+
+  function pickTab(t: Tab) {
+    setTab(t);
+    if (!INPUT_TABS.includes(t)) return;
+    try {
+      window.localStorage.setItem(PREF_KEY, t);
+    } catch {
+      /* 隐私模式下写不进去就算了，不影响本次使用 */
+    }
+  }
 
   // 打开面板时锁住背景滚动
   useEffect(() => {
@@ -129,7 +155,7 @@ export default function NoteSheet({
             {TABS.map((t) => (
               <button
                 key={t.key}
-                onClick={() => setTab(t.key)}
+                onClick={() => pickTab(t.key)}
                 className={`-mb-px border-b-2 px-3 py-2 text-sm transition ${
                   tab === t.key
                     ? 'border-brand-500 font-medium text-brand-500'
