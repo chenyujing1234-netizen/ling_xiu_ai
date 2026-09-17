@@ -417,7 +417,7 @@ function ImagePanel({ book, chapter, label }: { book: number; chapter: number; l
           </figure>
         ) : (
           <p className="card px-4 py-6 text-center text-sm text-muted">
-            未配置文生图模型，或本次生成失败。可在 .env 设置 AI_MODEL_IMAGE 后重试。
+            未配置文生图模型。在 .env.local 设置 AI_MODEL_IMAGE 后即可生成。
           </p>
         )
       }

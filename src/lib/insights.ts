@@ -8,6 +8,7 @@ import {
   imagePromptFor,
 } from './prompts';
 import { getBook, getRange, passageText, refKey, refLabel, contextWindow, getVerse } from './bible';
+import { saveSceneImage } from './media';
 
 // ---------- 类型 ----------
 
@@ -245,6 +246,14 @@ export async function getMindmap(
   );
 }
 
+/** 把供图链接下载落地，返回本站地址（链接 23 小时后失效，不能直接存库） */
+async function persistImage(remoteUrl: string): Promise<string> {
+  const res = await fetch(remoteUrl);
+  if (!res.ok) throw new Error(`配图下载失败（HTTP ${res.status}）`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  return await saveSceneImage(buf, /\.jpe?g(\?|$)/i.test(remoteUrl) ? 'jpg' : 'png');
+}
+
 /** 意境配图：依赖 elements 里的主题与地点 */
 export async function getSceneImage(
   bookId: number,
@@ -254,7 +263,8 @@ export async function getSceneImage(
 ): Promise<{ url: string | null }> {
   const r = resolveRange(bookId, chapter, from, to);
   const hit = readCache<{ url: string | null }>(r.key, 'image');
-  if (hit?.url) return hit;
+  // 只认落地后的本站地址；早期缓存过的外部临时链接已失效，重新生成
+  if (hit?.url?.startsWith('/')) return hit;
   if (!MODELS.image()) return { url: null };
 
   let thesis = r.label;
@@ -266,8 +276,10 @@ export async function getSceneImage(
   } catch {
     /* 没有 elements 也能出图，只是提示词弱一些 */
   }
-  const url = await generateImage(imagePromptFor(r.label, thesis, places));
-  const payload = { url };
-  if (url) writeCache(r.key, 'image', payload, MODELS.image());
+  const remote = await generateImage(imagePromptFor(r.label, thesis, places));
+  if (!remote) return { url: null };
+
+  const payload = { url: await persistImage(remote) };
+  writeCache(r.key, 'image', payload, MODELS.image());
   return payload;
 }

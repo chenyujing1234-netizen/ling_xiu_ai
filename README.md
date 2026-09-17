@@ -140,6 +140,13 @@ DAILY_CHAPTERS=4          # 每日默认读经章数
 | `deepseek-v4.1-flash` | — | 21s | 默认快模型，JSON 稳定 |
 | `glm-5.3` | — | 32s | JSON 不稳定（4 题只出 1 题），不建议 |
 
+### 文生图（意境配图）
+
+`wan2.7-image`，一次约 15–19 秒。这里有两个坑：
+
+1. **端点不是 `/images/generations`**。那个路径和原生 `text2image` 都返回 `url error, please check url`，异步提交还会被拒（`AccessDenied: current user api does not support asynchronous calls`）。实测唯一可用的是多模态生成端点 `/api/v1/services/aigc/multimodal-generation/generation`，同步返回图片链接。代码里按 `AI_BASE_URL` 自动推导，可用 `AI_IMAGE_URL` 覆盖。
+2. **返回的链接只有 23 小时有效期**。直接把它存进缓存，第二天就是一张裂图，所以生成后立刻下载落地到 `data/uploads/scene/`，库里存的是本站地址 `/api/scene/<name>.png`。
+
 ### AI 不可用时
 
 内置降级引擎：出题走模板题库，评分走启发式规则（篇幅、是否提出真问题、是否引用经文词句、是否有第一人称的自我涉入）。**功能不中断**，界面会标注"离线评估"。降级原因会打到服务端日志 `[ai:degraded]`，便于排查。
@@ -226,7 +233,7 @@ certbot certonly --webroot -w /var/www/certbot -d lingxiu.example.com \
 全部数据在 `data/` 下，直接备份这个目录即可：
 
 - `data/lingxiu.db` — SQLite 主库（用户、笔记、灵修、缓存）
-- `data/uploads/` — 录音与手写图片
+- `data/uploads/` — 录音与手写图片（`scene/` 子目录是 AI 生成的意境配图）
 - `data/raw/` — 圣经原始 JSON（可随时重新下载）
 
 ---

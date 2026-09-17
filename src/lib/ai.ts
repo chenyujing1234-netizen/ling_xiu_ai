@@ -205,27 +205,59 @@ export async function chatJson<T>(messages: ChatMessage[], opts: ChatOptions = {
   return extractJson<T>(raw);
 }
 
-/** 文生图：生成知识图谱/思维导图的意境配图。返回图片 URL；未配置则返回 null */
+/**
+ * 文生图端点。
+ *
+ * 这套服务上 OpenAI 兼容的 /images/generations 与原生 text2image 都回
+ * "url error, please check url"，异步提交也被拒（AccessDenied: current user api
+ * does not support asynchronous calls）。实测唯一可用的是多模态生成端点，
+ * 同步返回图片链接，一次约 15 秒。
+ */
+const IMAGE_URL = () =>
+  process.env.AI_IMAGE_URL ||
+  `${BASE_URL().replace(/\/compatible-mode\/v1$/, '')}/api/v1/services/aigc/multimodal-generation/generation`;
+
+/**
+ * 文生图。返回的链接来自对象存储且**只有 23 小时有效期**，
+ * 调用方必须自己落地保存，不能直接存库当长期地址（见 insights.getSceneImage）。
+ *
+ * 没配模型返回 null（上层据此给出"未配置"的提示）；配了却失败则抛出带原因的
+ * AiError —— 原来一律吞成 null，界面只能含糊地说"未配置或失败"，没法排查。
+ */
 export async function generateImage(prompt: string): Promise<string | null> {
   const model = MODELS.image();
   if (!model || !aiConfigured()) return null;
+
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 120_000);
+  const timer = setTimeout(() => ctl.abort(), 180_000);
   try {
-    const res = await fetch(`${BASE_URL()}/images/generations`, {
+    const res = await fetch(IMAGE_URL(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${API_KEY()}`,
       },
-      body: JSON.stringify({ model, prompt, n: 1, size: '1024*1024' }),
+      body: JSON.stringify({
+        model,
+        input: { messages: [{ role: 'user', content: [{ text: prompt }] }] },
+        parameters: { size: '1024*1024', n: 1 },
+      }),
       signal: ctl.signal,
     });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data?.data?.[0]?.url ?? data?.data?.[0]?.b64_json ?? null;
-  } catch {
-    return null;
+
+    const text = await res.text();
+    if (!res.ok) throw new AiError(`文生图失败（HTTP ${res.status}）：${text.slice(0, 200)}`);
+
+    const data = JSON.parse(text) as {
+      output?: { choices?: { message?: { content?: { image?: string }[] } }[] };
+    };
+    const url = data.output?.choices?.[0]?.message?.content?.find((c) => c?.image)?.image;
+    if (!url) throw new AiError(`文生图没有返回图片：${text.slice(0, 200)}`);
+    return url;
+  } catch (err) {
+    if (err instanceof AiError) throw err;
+    const msg = (err as Error).name === 'AbortError' ? '超过 180 秒未出图' : (err as Error).message;
+    throw new AiError(`文生图请求失败：${msg}`);
   } finally {
     clearTimeout(timer);
   }

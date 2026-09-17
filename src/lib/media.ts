@@ -59,3 +59,29 @@ export async function readMedia(relPath: string) {
 export function ownerOf(relPath: string): number {
   return Number(relPath.split('/')[0]);
 }
+
+// ---------- AI 生成的经文意境配图 ----------
+
+const SCENE_DIR = 'scene';
+
+/**
+ * 保存意境配图，返回可直接给 <img> 用的地址。
+ *
+ * 供图接口给的是 23 小时后过期的对象存储链接，存库当长期地址第二天就成裂图，
+ * 所以下载落地。配图按经文缓存、属于公共内容（不含任何个人信息），
+ * 因此不放进按用户分目录的私密区，登录用户都能看。
+ */
+export async function saveSceneImage(data: Buffer, ext: 'png' | 'jpg' = 'png'): Promise<string> {
+  const dir = join(UPLOAD_ROOT(), SCENE_DIR);
+  await mkdir(dir, { recursive: true });
+  const name = `${Date.now().toString(36)}${randomBytes(4).toString('hex')}.${ext}`;
+  await writeFile(join(dir, name), data);
+  return `/api/scene/${name}`;
+}
+
+export async function readSceneImage(name: string) {
+  if (!/^[A-Za-z0-9]+\.(png|jpg)$/.test(name)) throw new Error('非法文件名');
+  const ext = name.split('.').pop() ?? 'png';
+  const data = await readFile(join(UPLOAD_ROOT(), SCENE_DIR, name));
+  return { data, mime: MIME_BY_EXT[ext] ?? 'image/png' };
+}
