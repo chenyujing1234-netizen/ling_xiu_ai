@@ -181,6 +181,18 @@ Detail: Invalid response from https://dnspod.qcloud.com/static/webblock.html?d=.
 
 而 Let's Encrypt 本身也不为裸 IP 签发证书。两条路都堵住，所以用自签证书。代价是浏览器首次访问要手动信任。
 
+### 反代必须传 Host 相关头
+
+`next start` 下 `req.url` 的 origin 是应用自己的监听地址，middleware 若用它拼重定向地址，会把用户甩到 `localhost:3210` 上。Next.js 只认 `X-Forwarded-Proto`、**不认** `X-Forwarded-Host`，所以 `src/middleware.ts` 里的 `redirectTo()` 自己按请求头还原外部 origin。反代这三个头缺一不可：
+
+```nginx
+proxy_set_header Host $host;
+proxy_set_header X-Forwarded-Proto https;
+proxy_set_header X-Forwarded-Host $host;
+```
+
+好处是换域名时代码不用动，跟着实际访问地址走。（顺带一提：middleware 里不能改发相对 `Location`，它内部会对 `Location` 做 URL 解析，相对路径会直接抛 `ERR_INVALID_URL`。）
+
 nginx 里两个刻意的选择：
 
 - 本 server 是 443 的 `default_server` —— 裸 IP 访问不发送 SNI，必须由默认 server 应答。

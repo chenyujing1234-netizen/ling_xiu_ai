@@ -11,6 +11,22 @@ const PUBLIC_APIS = ['/api/auth/login', '/api/auth/apply'];
 
 const CHANGE_PW_PATH = '/me/password';
 
+/**
+ * 按「用户实际访问的地址」发重定向。
+ *
+ * 不能直接用 new URL(path, req.url)：`next start` 下 req.url 的 origin 是应用自己的
+ * 监听地址（localhost:3210），经 nginx 反代后会把用户甩到内网地址上。Next.js 只认
+ * X-Forwarded-Proto、不认 X-Forwarded-Host，所以这里自己按请求头拼出外部 origin。
+ * 也不能改发相对 Location——middleware 内部会对 Location 做 URL 解析，相对路径直接抛错。
+ */
+function redirectTo(req: NextRequest, path: string) {
+  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host');
+  const proto = req.headers.get('x-forwarded-proto') ?? req.nextUrl.protocol.replace(':', '');
+  // 没有 Host 头（理论上不该发生）时退回原行为，至少不 500
+  const base = host ? `${proto}://${host}` : req.url;
+  return NextResponse.redirect(new URL(path, base));
+}
+
 async function readToken(token: string | undefined): Promise<{ mustChangePw?: boolean } | null> {
   if (!token) return null;
   const secret = process.env.AUTH_SECRET;
@@ -34,7 +50,7 @@ export async function middleware(req: NextRequest) {
 
   // 已登录访问登录/申请页 → 回首页
   if (authed && isPublicPage) {
-    return NextResponse.redirect(new URL('/', req.url));
+    return redirectTo(req, '/');
   }
   if (isPublicPage || isPublicApi) return NextResponse.next();
 
@@ -42,9 +58,8 @@ export async function middleware(req: NextRequest) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: '请先登录' }, { status: 401 });
     }
-    const url = new URL('/login', req.url);
-    if (pathname !== '/') url.searchParams.set('next', pathname);
-    return NextResponse.redirect(url);
+    const next = pathname === '/' ? '' : `?next=${encodeURIComponent(pathname)}`;
+    return redirectTo(req, `/login${next}`);
   }
 
   // R-A4：首次登录必须改密。放行改密页本身与改密接口，否则会重定向成环。
@@ -56,7 +71,7 @@ export async function middleware(req: NextRequest) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: '请先修改初始密码' }, { status: 403 });
     }
-    return NextResponse.redirect(new URL(`${CHANGE_PW_PATH}?first=1`, req.url));
+    return redirectTo(req, `${CHANGE_PW_PATH}?first=1`);
   }
 
   return NextResponse.next();
