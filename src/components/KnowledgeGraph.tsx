@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide } from 'd3-force';
 import { svgToPng } from '@/lib/svg-export';
+import PanZoom from './PanZoom';
 
 export type GraphData = {
   nodes: { id: string; label: string; type: string; note?: string }[];
@@ -73,8 +74,8 @@ export default function KnowledgeGraph({ data, title }: { data: GraphData; title
 
   return (
     <div>
-      <div className="overflow-x-auto rounded-2xl border border-line bg-card no-bar">
-        <svg ref={svgRef} width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="min-w-[720px]">
+      <PanZoom width={W} height={H}>
+        <svg ref={svgRef} width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block">
           <rect width={W} height={H} fill="#fbf8f1" />
           <text x={20} y={30} fontSize={15} fontWeight={600} fill="#2c2620">
             {title}
@@ -153,7 +154,7 @@ export default function KnowledgeGraph({ data, title }: { data: GraphData; title
             ))}
           </g>
         </svg>
-      </div>
+      </PanZoom>
 
       {active && (
         <div className="card mt-3 px-4 py-3">
@@ -166,7 +167,7 @@ export default function KnowledgeGraph({ data, title }: { data: GraphData; title
       )}
 
       <div className="mt-3 flex items-center justify-between">
-        <p className="text-xs text-muted">点节点看说明 · 可左右拖动查看</p>
+        <p className="text-xs text-muted">点节点看说明 · 拖动平移 · 双指缩放 · ⤢ 全屏</p>
         <button
           className="btn-ghost px-3 py-1.5 text-xs"
           onClick={() => svgRef.current && svgToPng(svgRef.current, `知识图谱-${title}.png`)}

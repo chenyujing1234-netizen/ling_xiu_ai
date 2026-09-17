@@ -2,6 +2,7 @@
 
 import { useMemo, useRef } from 'react';
 import { svgToPng } from '@/lib/svg-export';
+import PanZoom from './PanZoom';
 
 export type MindmapNode = { label: string; children?: MindmapNode[] };
 
@@ -65,13 +66,13 @@ export default function Mindmap({ data, title }: { data: MindmapNode; title: str
 
   return (
     <div>
-      <div className="overflow-x-auto rounded-2xl border border-line bg-card no-bar">
+      <PanZoom width={width} height={height}>
         <svg
           ref={svgRef}
           width={width}
           height={height}
           viewBox={`0 0 ${width} ${height}`}
-          style={{ minWidth: width }}
+          className="block"
         >
           <rect width={width} height={height} fill="#fbf8f1" />
 
@@ -129,10 +130,10 @@ export default function Mindmap({ data, title }: { data: MindmapNode; title: str
             })}
           </g>
         </svg>
-      </div>
+      </PanZoom>
 
       <div className="mt-3 flex items-center justify-between">
-        <p className="text-xs text-muted">可左右拖动查看完整导图</p>
+        <p className="text-xs text-muted">拖动平移 · 双指缩放 · ⤢ 全屏</p>
         <button
           className="btn-ghost px-3 py-1.5 text-xs"
           onClick={() => svgRef.current && svgToPng(svgRef.current, `思维导图-${title}.png`)}
