@@ -1,14 +1,11 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { api } from '@/lib/client';
+import { api, hardNavigate } from '@/lib/client';
 
 export default function LogoutButton() {
-  const router = useRouter();
-
   async function logout() {
     await api('/api/auth/logout', { method: 'POST' }).catch(() => null);
-    router.replace('/login');
+    hardNavigate('/login');
   }
 
   return (

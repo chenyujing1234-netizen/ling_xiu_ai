@@ -1,11 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { api } from '@/lib/client';
+import { useSearchParams } from 'next/navigation';
+import { api, hardNavigate } from '@/lib/client';
 
 export default function LoginForm() {
-  const router = useRouter();
   const params = useSearchParams();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -21,7 +20,7 @@ export default function LoginForm() {
         json: { phone, password },
       });
       const next = params.get('next');
-      router.replace(res.mustChangePw ? '/me/password?first=1' : next || '/');
+      hardNavigate(res.mustChangePw ? '/me/password?first=1' : next || '/');
     } catch (err) {
       setError((err as Error).message);
     } finally {

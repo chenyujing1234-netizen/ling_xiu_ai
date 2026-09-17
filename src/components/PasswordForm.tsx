@@ -1,11 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { api } from '@/lib/client';
+import { useSearchParams } from 'next/navigation';
+import { api, hardNavigate } from '@/lib/client';
 
 export default function PasswordForm() {
-  const router = useRouter();
   const first = useSearchParams().get('first') === '1';
 
   const [current, setCurrent] = useState('');
@@ -26,10 +25,7 @@ export default function PasswordForm() {
     try {
       await api('/api/auth/password', { json: { current, next } });
       setDone(true);
-      setTimeout(() => {
-        router.replace('/');
-        router.refresh();
-      }, 900);
+      setTimeout(() => hardNavigate('/'), 900);
     } catch (err) {
       setError((err as Error).message);
     } finally {
