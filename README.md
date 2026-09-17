@@ -148,25 +148,58 @@ DAILY_CHAPTERS=4          # 每日默认读经章数
 
 ## 部署
 
-### 必须用 HTTPS
+### 当前线上状态
 
-浏览器只在 HTTPS（或 localhost）下允许 `getUserMedia`。**没有 HTTPS 就无法录音。**
+| 项 | 值 |
+|---|---|
+| 访问地址 | `https://124.221.115.174/` |
+| 证书 | 自签，SAN 含该 IP，有效期至 2036-09 |
+| 应用进程 | systemd `lingxiu-ai.service`，已开机自启 |
+| 监听 | `127.0.0.1:3210`（不对外暴露，只经 nginx） |
+| nginx 配置 | `/etc/nginx/sites-available/lingxiu-ai` |
 
-Nginx 反代示例：
+常用运维命令：
 
-```nginx
-location / {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-
-    # 引导揭晓是 SSE 流式输出，这两行必须有，否则流会被攒成一整块
-    proxy_buffering off;
-    proxy_read_timeout 300s;
-}
+```bash
+systemctl status lingxiu-ai        # 状态
+systemctl restart lingxiu-ai       # 改完 .env.local 后重启
+journalctl -u lingxiu-ai -f        # 实时日志（AI 降级、报错都在这里）
+npm run build && systemctl restart lingxiu-ai   # 改完代码后重新发布
 ```
 
-### 嵌入微信小程序
+### 必须用 HTTPS
+
+浏览器只在 HTTPS（或 localhost）下允许 `getUserMedia`。**没有 HTTPS 就无法录音。** 自签证书在用户点「继续访问」并信任之后，页面仍属于 secure context，录音可以正常工作。
+
+### 为什么是自签证书
+
+本机在腾讯云大陆区，**未备案域名走 80 端口会被 DNSPod 替换成拦截页**，Let's Encrypt 的 HTTP-01 验证因此拿不到挑战文件：
+
+```
+Detail: Invalid response from https://dnspod.qcloud.com/static/webblock.html?d=...: 566
+```
+
+而 Let's Encrypt 本身也不为裸 IP 签发证书。两条路都堵住，所以用自签证书。代价是浏览器首次访问要手动信任。
+
+nginx 里两个刻意的选择：
+
+- 本 server 是 443 的 `default_server` —— 裸 IP 访问不发送 SNI，必须由默认 server 应答。
+- `listen` 上保留 `http2` —— 443 的协议选项由 `default_server` 决定，去掉会让本机另外 5 个 HTTP/2 站点一起降级到 HTTP/1.1。
+
+### 想去掉浏览器警告 / 想在微信里用
+
+**微信内置浏览器和小程序 `web-view` 打不开自签证书站点**，它们要求已备案域名 + 后台白名单。要用微信就必须换成域名：
+
+```bash
+# 1. 给已备案的主域加一条 A 记录：lingxiu.example.com → 124.221.115.174
+# 2. 签发正式证书
+certbot certonly --webroot -w /var/www/certbot -d lingxiu.example.com \
+  --non-interactive --agree-tos --deploy-hook 'systemctl reload nginx'
+# 3. 把 sites-available/lingxiu-ai 里的 server_name 与 ssl_certificate 换成该域名
+# 4. 同步改 .env.local 的 APP_URL，然后 systemctl reload nginx
+```
+
+备案是按主域生效的，子域不必单独备案。
 
 页面已按 `web-view` 的限制来做：不依赖微信 JS-SDK、不用 `window.open`、Cookie 同站、适配 `safe-area-inset-bottom`。
 
@@ -174,7 +207,7 @@ location / {
 <web-view src="https://你的域名/"></web-view>
 ```
 
-小程序端需要在 MP 后台配置业务域名。注意 `web-view` 内的录音权限受微信版本限制，若不可用，用户仍可用手写或文字笔记。
+注意 `web-view` 内的录音权限受微信版本限制，若不可用，用户仍可用手写或文字笔记。
 
 ### 数据与备份
 
