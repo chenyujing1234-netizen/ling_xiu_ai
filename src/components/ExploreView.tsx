@@ -141,6 +141,7 @@ function LazyPanel<T>({
   const [data, setData] = useState<T | null>(null);
   const [extra, setExtra] = useState<{ unlocked?: boolean; lockedHint?: string }>({});
   const [busy, setBusy] = useState(false);
+  const [probing, setProbing] = useState(true);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -159,13 +160,46 @@ function LazyPanel<T>({
     }
   }, [kind, book, chapter]);
 
-  // 切换经卷/章节时清空，避免显示上一章的内容
+  /**
+   * 生成过的内容要能复原。
+   *
+   * 切 tab 会让面板重新挂载、state 归零，之前生成的图看起来就"不见了"，
+   * 其实一直缓存在服务端。这里进面板先只查缓存（cacheOnly，不会触发 AI），
+   * 命中就直接显示。换经卷/章节时同样走这里，顺带清掉上一章的内容。
+   */
   useEffect(() => {
+    let alive = true;
     setData(null);
     setError('');
-  }, [book, chapter]);
+    setProbing(true);
+    api<{ data: T | null; unlocked?: boolean; lockedHint?: string }>(
+      `/api/insights?kind=${kind}&book=${book}&chapter=${chapter}&cacheOnly=1`,
+    )
+      .then((res) => {
+        if (!alive || !res.data) return;
+        setData(res.data);
+        setExtra({ unlocked: res.unlocked, lockedHint: res.lockedHint });
+      })
+      .catch(() => {
+        /* 探测失败就当没缓存，照常显示生成按钮，不打扰用户 */
+      })
+      .finally(() => {
+        if (alive) setProbing(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [kind, book, chapter]);
 
   if (data) return <>{children(data, extra)}</>;
+
+  if (probing) {
+    return (
+      <div className="rounded-2xl border border-dashed border-line px-5 py-10 text-center text-sm text-muted">
+        载入中…
+      </div>
+    );
+  }
 
   if (busy) {
     return (

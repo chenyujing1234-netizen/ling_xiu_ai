@@ -7,6 +7,7 @@ import {
   getMindmap,
   getSceneImage,
   resolveRange,
+  isCached,
 } from '@/lib/insights';
 import { db } from '@/lib/db';
 import { UNLOCK_SCORE } from '@/lib/devotion';
@@ -26,14 +27,21 @@ export async function GET(req: Request) {
     const bookId = intParam(req, 'book');
     const chapter = intParam(req, 'chapter');
     const force = url.searchParams.get('force') === '1' && session.role === 'admin';
+    // 只取已生成过的结果：命中就返回，没有就回 null，绝不在这里触发 AI 生成
+    const cacheOnly = url.searchParams.get('cacheOnly') === '1';
 
     if (kind === 'context') {
       const verse = intParam(req, 'verse');
+      if (cacheOnly && !isCached(bookId, chapter, kind, { verse })) return { kind, data: null };
       return { kind, data: await getContextInsight(bookId, chapter, verse, force) };
     }
 
     const from = intParam(req, 'from', 1);
     const to = intParam(req, 'to', 0);
+
+    if (cacheOnly && kind !== 'meta' && !isCached(bookId, chapter, kind, { from, to })) {
+      return { kind, data: null };
+    }
 
     switch (kind) {
       case 'elements': {

@@ -223,6 +223,22 @@ function ContextPanel({ target }: { target: VerseTarget }) {
       .finally(() => setLoading(false));
   }, [target]);
 
+  // 这一节的深读若已经生成过，重新打开时直接取回来（cacheOnly 不会触发 AI）
+  useEffect(() => {
+    let alive = true;
+    setAi(null);
+    api<{ data: AiContext | null }>(
+      `/api/insights?kind=context&book=${target.bookId}&chapter=${target.chapter}&verse=${target.verse}&cacheOnly=1`,
+    )
+      .then((res) => alive && res.data && setAi(res.data))
+      .catch(() => {
+        /* 没有就没有，照常显示按钮 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [target]);
+
   async function loadAi() {
     setAiBusy(true);
     setError('');

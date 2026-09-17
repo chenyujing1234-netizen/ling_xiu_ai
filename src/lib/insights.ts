@@ -66,6 +66,29 @@ export function clearCache(key: string) {
   db().prepare(`DELETE FROM passage_insights WHERE ref_key = ?`).run(key);
 }
 
+function contextKey(bookId: number, chapter: number, verse: number) {
+  return `${bookId}-${chapter}-${verse}-ctx`;
+}
+
+/**
+ * 这一段的某类洞察是否已经生成过。
+ *
+ * 给前端用来"复原"已生成的内容：进面板时先问一句有没有，有就直接取回来显示，
+ * 没有才让用户点生成。只查库，绝不触发 AI 调用。
+ */
+export function isCached(
+  bookId: number,
+  chapter: number,
+  kind: string,
+  opts: { from?: number; to?: number; verse?: number } = {},
+): boolean {
+  const key =
+    opts.verse !== undefined
+      ? contextKey(bookId, chapter, opts.verse)
+      : resolveRange(bookId, chapter, opts.from ?? 1, opts.to ?? 0).key;
+  return readCache(key, kind) !== null;
+}
+
 /** 统一入口：先查缓存，miss 才调 AI（R-C5 控制成本） */
 async function cached<T>(
   key: string,
@@ -138,9 +161,8 @@ export async function getContextInsight(
   verse: number,
   force = false,
 ): Promise<ContextInsight> {
-  const key = `${bookId}-${chapter}-${verse}-ctx`;
   return cached<ContextInsight>(
-    key,
+    contextKey(bookId, chapter, verse),
     'context',
     async () => {
       if (!aiConfigured()) throw new Error('AI 未配置，无法生成上下文分析');
