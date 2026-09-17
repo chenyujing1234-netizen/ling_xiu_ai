@@ -30,8 +30,16 @@ export default function BottomTab() {
                 className="flex h-[56px] flex-col items-center justify-center gap-0.5 active:opacity-60"
                 aria-current={active ? 'page' : undefined}
               >
-                <tab.icon className={active ? 'text-brand-500' : 'text-muted'} />
-                <span className={`text-[10px] ${active ? 'text-brand-500 font-medium' : 'text-muted'}`}>
+                {/* 选中态除了换色还垫一个药丸底：brand-500 与 muted 的明度太接近，
+                    只靠文字颜色在 10px 字号下分不出来，得有个形状上的差别 */}
+                <span
+                  className={`flex h-7 w-12 items-center justify-center rounded-full transition ${
+                    active ? 'bg-brand-100' : ''
+                  }`}
+                >
+                  <tab.icon className={active ? 'text-brand-700' : 'text-muted'} />
+                </span>
+                <span className={`text-[10px] ${active ? 'font-semibold text-brand-700' : 'text-muted'}`}>
                   {tab.label}
                 </span>
               </Link>

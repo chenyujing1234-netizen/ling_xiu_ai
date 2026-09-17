@@ -166,7 +166,9 @@ export default function Recorder({
       </button>
 
       <p className="text-sm text-muted">{hint}</p>
-      <p className="text-center text-xs text-muted">只留下识别出的文字，不保存录音文件</p>
+      <p className="text-center text-xs text-muted">
+        只留下识别出的文字，不保存录音文件 · 单次最长 2 分钟
+      </p>
     </div>
   );
 }

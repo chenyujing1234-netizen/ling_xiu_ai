@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { api } from '@/lib/client';
 
 export default function ApplyPage() {
-  const [form, setForm] = useState({ name: '', phone: '', church: '', note: '' });
+  const [form, setForm] = useState({ phone: '', note: '' });
   const [state, setState] = useState<'idle' | 'busy' | 'done'>('idle');
   const [error, setError] = useState('');
 
@@ -55,7 +55,6 @@ export default function ApplyPage() {
       </header>
 
       <form onSubmit={submit} className="space-y-3">
-        <input className="field" placeholder="姓名 / 弟兄姊妹称呼" value={form.name} onChange={set('name')} required />
         <input
           className="field"
           type="tel"
@@ -65,10 +64,9 @@ export default function ApplyPage() {
           onChange={set('phone')}
           required
         />
-        <input className="field" placeholder="所属教会 / 小组（选填）" value={form.church} onChange={set('church')} />
         <textarea
           className="field min-h-[96px] resize-none"
-          placeholder="想说的话：谁介绍你来的、目前的读经情况（选填）"
+          placeholder="想说的话：谁介绍你来的（选填）"
           value={form.note}
           onChange={set('note')}
         />

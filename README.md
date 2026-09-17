@@ -83,8 +83,9 @@ AI 出的题一律是**主观思辨题**，禁止选择题、禁止唯一正确�
 前置：Node.js ≥ 18.18
 
 ```bash
-# 1. 安装依赖
+# 1. 安装依赖（ffmpeg 供口述转文字用，缺了只影响口述）
 npm install
+apt-get install -y ffmpeg
 
 # 2. 配置环境变量
 cp .env.example .env.local
@@ -115,9 +116,8 @@ AI_API_KEY=
 AI_MODEL=deepseek-v4-pro          # 主模型：引导对话，质量优先
 AI_MODEL_FAST=deepseek-v4.1-flash # 快模型：出题、评分、结构化抽取
 AI_MODEL_IMAGE=wan2.7-image       # 文生图，留空则关闭意境配图
-AI_ASR_MODEL=                     # 语音转文字，留空则口述功能不可用（见下）
-AI_ASR_BASE_URL=                  # 留空沿用 AI_BASE_URL
-AI_ASR_API_KEY=                   # 留空沿用 AI_API_KEY
+# 口述转文字用上面的 key 即可，走 realtime 模型的 WebSocket，无需额外配置（见下）
+# 另需服务器装 ffmpeg： apt-get install -y ffmpeg
 DEVOTION_UNLOCK_SCORE=60  # 解锁引导所需分数
 DAILY_CHAPTERS=4          # 每日默认读经章数
 ```
@@ -151,25 +151,34 @@ DAILY_CHAPTERS=4          # 每日默认读经章数
 
 ### 语音转文字（口述笔记）
 
-口述只保留识别出的文字、**不保存音频文件**，所以这套配置不通，口述功能就直接不可用（界面会明确提示原因，不会悄悄失败）。
+口述**按住说话、松开即出文字**，只保留识别出的文字，**不保存音频文件**——音频在内存里转一道就丢掉，不落盘也不入库。
 
-需要单独配一套服务：默认那套 tokenplan **没有语音识别能力**，实测四条路全不通 ——
+用主 `AI_API_KEY` 就能转写，不必另配服务，但要摸清两件事：
+
+**一、转写能力藏在 realtime 模型里，HTTP 那几条路都不通。**
 
 | 尝试 | 结果 |
 |---|---|
 | `/audio/transcriptions` | `400 Model not exist`，两个音频模型都不认 |
 | `/chat/completions` 传音频 | `200` 但只回空壳 `{"status_message":"Success."}` |
 | 多模态生成端点传音频 | 同上 |
-| realtime WebSocket（三个候选地址） | 全部连不上 |
+| **realtime WebSocket** | **可用**，吐 `conversation.item.input_audio_transcription.completed` |
 
-它只有 `tts-plus`（文字转语音）与 `realtime-plus`（实时对话，仅 WebSocket 且不可达），都不是转写。所以请填一套支持 OpenAI 兼容 `/audio/transcriptions` 的服务（阿里百炼主账号，或任何提供 whisper / SenseVoice 的服务商）：
+地址按 `AI_BASE_URL` 的主机推导成 `wss://<host>/api-ws/v1/realtime`，会话里配 `input_audio_transcription.model = gummy-realtime-v1` 才会出转写事件。只 `commit`、不发 `response.create`，否则模型还会搭一句话回来，白等几秒也白烧 token。实测 5.5 秒中文音频 1.1 秒出结果。
+
+**二、有两个硬约束。**
+
+- **必须装 ffmpeg**。浏览器只能录 opus/aac，识别端只吃 16kHz 单声道 PCM16，靠 ffmpeg 在内存里转（`apt-get install -y ffmpeg`）。
+- **单次音频缓冲上限 30 秒**，超了回 `Input audio buffer exceeded maximum duration (30s)`。所以长录音按 25 秒切段、逐段 `commit` 再把文字拼起来；切点选在附近最安静的 100ms，避免把一个词劈成两半。前端上限 2 分钟，实测 122 秒能完整转写。
+
+还有个坑与代码有关：`ws` 必须列进 `next.config.mjs` 的 `serverExternalPackages`，否则会被打包成浏览器桩子，**连不上也不报错，只能干等到超时**。
 
 ```bash
-# 填好 .env.local 的 AI_ASR_* 之后自查，能区分端点不对／鉴权不过／模型名不对
+# 自查：按真实调用顺序检查 配置 → ffmpeg → 握手 → 转写
 node scripts/check-asr.mjs
 
-# 想顺带看识别质量，用一段真实录音
-node scripts/check-asr.mjs my.wav
+# 传一个录音（任意格式）顺带看识别质量
+node scripts/check-asr.mjs my.webm
 ```
 
 ### AI 不可用时

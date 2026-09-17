@@ -157,7 +157,7 @@ export default function NoteSheet({
                 onClick={() => pickTab(t.key)}
                 className={`-mb-px border-b-2 px-3 py-2 text-sm transition ${
                   tab === t.key
-                    ? 'border-brand-500 font-medium text-brand-500'
+                    ? 'border-brand-700 font-semibold text-brand-700'
                     : 'border-transparent text-muted'
                 }`}
               >

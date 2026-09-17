@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // better-sqlite3 与 sharp 都是原生模块，必须留给 Node 运行时自行 require
-  serverExternalPackages: ['better-sqlite3', 'sharp'],
+  // better-sqlite3 与 sharp 是原生模块，必须留给 Node 运行时自行 require；
+  // ws 打进 bundle 后会被换成浏览器桩子，连不上也不报错，只能干等到超时
+  serverExternalPackages: ['better-sqlite3', 'sharp', 'ws'],
   eslint: { ignoreDuringBuilds: true },
   async headers() {
     return [

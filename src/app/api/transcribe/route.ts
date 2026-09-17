@@ -1,6 +1,6 @@
 import { handler, bad } from '@/lib/api';
 import { requireSession } from '@/lib/auth';
-import { transcribe } from '@/lib/ai';
+import { transcribeAudio } from '@/lib/asr';
 
 /** 约 10MB，opus 编码下够说十几分钟，正常口述远到不了 */
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     if (!(file instanceof Blob) || file.size === 0) bad('没有收到录音');
     if (file.size > MAX_BYTES) bad('录音太长了，请分几段说');
 
-    const ext = /mp4|m4a|aac/.test(file.type) ? 'm4a' : 'webm';
-    return { text: await transcribe(file, `note.${ext}`) };
+    // ffmpeg 按内容探测格式，不依赖扩展名，所以这里不用管浏览器给的是 opus 还是 aac
+    return { text: await transcribeAudio(file) };
   });
 }
