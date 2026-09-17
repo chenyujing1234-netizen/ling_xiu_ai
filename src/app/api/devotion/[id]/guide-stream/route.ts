@@ -12,7 +12,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   if (!session) return NextResponse.json({ error: '请先登录' }, { status: 401 });
 
   const id = Number((await ctx.params).id);
-  const d = getDevotion(id, session.uid);
+  const d = await getDevotion(id, session.uid);
   if (!d) return NextResponse.json({ error: '灵修记录不存在' }, { status: 404 });
 
   // R-D2：核心约束，没解锁就没有引导
@@ -24,9 +24,9 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   }
 
   // 已经生成过就直接回放，不重复消耗额度
-  const existing = db()
+  const existing = await db()
     .prepare(`SELECT content FROM coach_messages WHERE devotion_id = ? AND role='coach' ORDER BY id LIMIT 1`)
-    .get(d.id) as { content: string } | undefined;
+    .get<{ content: string }>(d.id);
 
   const encoder = new TextEncoder();
   const send = (obj: unknown) => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
@@ -43,7 +43,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
           // done 事件不重复回传全文，前端已经逐段拼好了
           controller.enqueue(send(event.type === 'done' ? { type: 'done' } : event));
         }
-        if (d.stage === 'reflect') setStage(d.id, 'guided');
+        if (d.stage === 'reflect') await setStage(d.id, 'guided');
       } catch (err) {
         controller.enqueue(send({ type: 'error', message: (err as Error).message }));
       } finally {

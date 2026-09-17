@@ -7,6 +7,6 @@ export default async function AdminPage() {
   const session = await getSession();
   if (session?.role !== 'admin') redirect('/');
 
-  const books = allBooks().map((b) => ({ id: b.id, name: b.name_cn, chapters: b.chapters }));
+  const books = (await allBooks()).map((b) => ({ id: b.id, name: b.name_cn, chapters: b.chapters }));
   return <AdminPanel books={books} />;
 }

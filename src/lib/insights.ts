@@ -41,10 +41,10 @@ export type MindmapNode = { label: string; children?: MindmapNode[] };
 
 // ---------- 缓存 ----------
 
-function readCache<T>(key: string, kind: string): T | null {
-  const row = db()
+async function readCache<T>(key: string, kind: string): Promise<T | null> {
+  const row = await db()
     .prepare(`SELECT payload FROM passage_insights WHERE ref_key = ? AND kind = ?`)
-    .get(key, kind) as { payload: string } | undefined;
+    .get<{ payload: string }>(key, kind);
   if (!row) return null;
   try {
     return JSON.parse(row.payload) as T;
@@ -53,18 +53,18 @@ function readCache<T>(key: string, kind: string): T | null {
   }
 }
 
-function writeCache(key: string, kind: string, payload: unknown, model: string) {
-  db()
+async function writeCache(key: string, kind: string, payload: unknown, model: string) {
+  await db()
     .prepare(
       `INSERT INTO passage_insights (ref_key, kind, payload, model) VALUES (?, ?, ?, ?)
-       ON CONFLICT(ref_key, kind) DO UPDATE SET payload = excluded.payload, model = excluded.model,
-       created_at = datetime('now','localtime')`,
+       ON DUPLICATE KEY UPDATE payload = VALUES(payload), model = VALUES(model),
+       created_at = NOW()`,
     )
     .run(key, kind, JSON.stringify(payload), model);
 }
 
-export function clearCache(key: string) {
-  db().prepare(`DELETE FROM passage_insights WHERE ref_key = ?`).run(key);
+export async function clearCache(key: string) {
+  await db().prepare(`DELETE FROM passage_insights WHERE ref_key = ?`).run(key);
 }
 
 function contextKey(bookId: number, chapter: number, verse: number) {
@@ -77,17 +77,17 @@ function contextKey(bookId: number, chapter: number, verse: number) {
  * 给前端用来"复原"已生成的内容：进面板时先问一句有没有，有就直接取回来显示，
  * 没有才让用户点生成。只查库，绝不触发 AI 调用。
  */
-export function isCached(
+export async function isCached(
   bookId: number,
   chapter: number,
   kind: string,
   opts: { from?: number; to?: number; verse?: number } = {},
-): boolean {
+): Promise<boolean> {
   const key =
     opts.verse !== undefined
       ? contextKey(bookId, chapter, opts.verse)
-      : resolveRange(bookId, chapter, opts.from ?? 1, opts.to ?? 0).key;
-  return readCache(key, kind) !== null;
+      : (await resolveRange(bookId, chapter, opts.from ?? 1, opts.to ?? 0)).key;
+  return (await readCache(key, kind)) !== null;
 }
 
 /** 统一入口：先查缓存，miss 才调 AI（R-C5 控制成本） */
@@ -98,18 +98,18 @@ async function cached<T>(
   force = false,
 ): Promise<T> {
   if (!force) {
-    const hit = readCache<T>(key, kind);
+    const hit = await readCache<T>(key, kind);
     if (hit) return hit;
   }
   const fresh = await produce();
-  writeCache(key, kind, fresh, MODELS.fast());
+  await writeCache(key, kind, fresh, MODELS.fast());
   return fresh;
 }
 
 // ---------- 段落范围助手 ----------
 
-export function resolveRange(bookId: number, chapter: number, from = 1, to = 0) {
-  const verses = getRange(bookId, chapter, from, to || 999);
+export async function resolveRange(bookId: number, chapter: number, from = 1, to = 0) {
+  const verses = await getRange(bookId, chapter, from, to || 999);
   const start = verses[0]?.verse ?? from;
   const end = verses[verses.length - 1]?.verse ?? from;
   return {
@@ -117,8 +117,8 @@ export function resolveRange(bookId: number, chapter: number, from = 1, to = 0) 
     from: start,
     to: end,
     key: refKey(bookId, chapter, start, end),
-    label: refLabel(bookId, chapter, start, end),
-    genre: getBook(bookId)?.genre ?? '叙事',
+    label: await refLabel(bookId, chapter, start, end),
+    genre: (await getBook(bookId))?.genre ?? '叙事',
   };
 }
 
@@ -131,7 +131,7 @@ export async function getElements(
   to = 0,
   force = false,
 ): Promise<Elements> {
-  const r = resolveRange(bookId, chapter, from, to);
+  const r = await resolveRange(bookId, chapter, from, to);
   return cached<Elements>(
     r.key,
     'elements',
@@ -167,15 +167,18 @@ export async function getContextInsight(
     'context',
     async () => {
       if (!aiConfigured()) throw new Error('AI 未配置，无法生成上下文分析');
-      const target = getVerse(bookId, chapter, verse);
-      const { before, after } = contextWindow(bookId, chapter, verse, 10);
+      // 目标节与上下文窗口互不依赖，一起取
+      const [target, { before, after }] = await Promise.all([
+        getVerse(bookId, chapter, verse),
+        contextWindow(bookId, chapter, verse, 10),
+      ]);
       return await chatJson<ContextInsight>(
         [
           { role: 'system', content: '你熟悉圣经文学结构与释经学，只输出 JSON。' },
           {
             role: 'user',
             content: contextPrompt({
-              ref: refLabel(bookId, chapter, verse),
+              ref: await refLabel(bookId, chapter, verse),
               verseText: `${target?.cn ?? ''}${target?.en ? `\n[EN] ${target.en}` : ''}`,
               before: passageText(before, 'cn'),
               after: passageText(after, 'cn'),
@@ -196,7 +199,7 @@ export async function getGraph(
   to = 0,
   force = false,
 ): Promise<GraphData> {
-  const r = resolveRange(bookId, chapter, from, to);
+  const r = await resolveRange(bookId, chapter, from, to);
   return cached<GraphData>(
     r.key,
     'graph',
@@ -225,7 +228,7 @@ export async function getMindmap(
   to = 0,
   force = false,
 ): Promise<MindmapNode> {
-  const r = resolveRange(bookId, chapter, from, to);
+  const r = await resolveRange(bookId, chapter, from, to);
   return cached<MindmapNode>(
     r.key,
     'mindmap',
@@ -261,8 +264,8 @@ export async function getSceneImage(
   from = 1,
   to = 0,
 ): Promise<{ url: string | null }> {
-  const r = resolveRange(bookId, chapter, from, to);
-  const hit = readCache<{ url: string | null }>(r.key, 'image');
+  const r = await resolveRange(bookId, chapter, from, to);
+  const hit = await readCache<{ url: string | null }>(r.key, 'image');
   // 只认落地后的本站地址；早期缓存过的外部临时链接已失效，重新生成
   if (hit?.url?.startsWith('/')) return hit;
   if (!MODELS.image()) return { url: null };
@@ -280,6 +283,6 @@ export async function getSceneImage(
   if (!remote) return { url: null };
 
   const payload = { url: await persistImage(remote) };
-  writeCache(r.key, 'image', payload, MODELS.image());
+  await writeCache(r.key, 'image', payload, MODELS.image());
   return payload;
 }

@@ -21,7 +21,7 @@ export async function GET(req: Request) {
     if (bookId) {
       const chapter = intParam(req, 'chapter');
       return {
-        notes: db()
+        notes: await db()
           .prepare(
             `SELECT id, book_id, chapter, verse, kind, content, media_path, god_spoke, created_at
              FROM verse_notes WHERE user_id = ? AND book_id = ? AND chapter = ? ORDER BY verse, id`,
@@ -32,7 +32,7 @@ export async function GET(req: Request) {
 
     // 全部笔记（我的页面用），带经卷名
     return {
-      notes: db()
+      notes: await db()
         .prepare(
           `SELECT n.id, n.book_id, b.name_cn AS book_name, n.chapter, n.verse, n.kind,
                   n.content, n.media_path, n.god_spoke, n.created_at
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     const data = await body(req, TextNote);
     if (!data.content && !data.godSpoke) bad('笔记内容不能为空');
 
-    const info = db()
+    const info = await db()
       .prepare(
         `INSERT INTO verse_notes
            (user_id, book_id, chapter, verse, kind, content, god_spoke, devotion_id)
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
         data.devotionId ?? null,
       );
 
-    markEngaged(session.uid, data.bookId, data.chapter);
+    await markEngaged(session.uid, data.bookId, data.chapter);
     return { id: info.lastInsertRowid };
   });
 }
@@ -78,7 +78,7 @@ export async function DELETE(req: Request) {
   return handler(async () => {
     const session = await requireSession();
     const id = intParam(req, 'id');
-    const info = db()
+    const info = await db()
       .prepare(`DELETE FROM verse_notes WHERE id = ? AND user_id = ?`)
       .run(id, session.uid);
     if (!info.changes) throw new HttpError(404, '笔记不存在');
@@ -87,11 +87,11 @@ export async function DELETE(req: Request) {
 }
 
 /** 有笔记就说明有互动，计入"真正读过"的判定依据（R-D6） */
-function markEngaged(userId: number, bookId: number, chapter: number) {
-  db()
+async function markEngaged(userId: number, bookId: number, chapter: number) {
+  await db()
     .prepare(
-      `INSERT INTO reading_logs (user_id, day, book_id, chapter, engaged) VALUES (?, ?, ?, ?, 1)
-       ON CONFLICT(user_id, day, book_id, chapter) DO UPDATE SET engaged = 1`,
+      'INSERT INTO reading_logs (user_id, `day`, book_id, chapter, engaged) VALUES (?, ?, ?, ?, 1)' +
+        ' ON DUPLICATE KEY UPDATE engaged = 1',
     )
     .run(userId, today(), bookId, chapter);
 }

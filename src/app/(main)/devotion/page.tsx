@@ -28,18 +28,21 @@ export default async function DevotionListPage({
 }) {
   const sp = await searchParams;
   const session = await getSession();
-  const settings = getSettings(session!.uid);
-  const books = allBooks().map((b) => ({ id: b.id, name: b.name_cn, chapters: b.chapters }));
-
-  const rows = db()
-    .prepare(
-      `SELECT d.id, d.day, d.book_id, b.name_cn AS book_name, d.chapter, d.verse_start, d.verse_end,
-              d.stage, d.score, d.unlocked, d.completed_at,
-              (SELECT COUNT(*) FROM devotion_inputs i WHERE i.devotion_id = d.id) AS input_count
-       FROM devotions d JOIN bible_books b ON b.id = d.book_id
-       WHERE d.user_id = ? ORDER BY d.id DESC LIMIT 60`,
-    )
-    .all(session!.uid) as Row[];
+  const [settings, bookList, rows] = await Promise.all([
+    getSettings(session!.uid),
+    allBooks(),
+    db()
+      .prepare(
+        `SELECT d.id, d.day, d.book_id, b.name_cn AS book_name, d.chapter, d.verse_start, d.verse_end,
+                d.stage, d.score, d.unlocked, d.completed_at,
+                (SELECT COUNT(*) FROM devotion_inputs i WHERE i.devotion_id = d.id) AS input_count
+         FROM devotions d JOIN bible_books b ON b.id = d.book_id
+         WHERE d.user_id = ? ORDER BY d.id DESC LIMIT 60`,
+      )
+      .all<Row>(session!.uid),
+  ]);
+  const books = bookList.map((b) => ({ id: b.id, name: b.name_cn, chapters: b.chapters }));
+  const startLabel = await refLabel(settings.cursor_book, settings.cursor_chapter);
 
   const ongoing = rows.filter((r) => r.stage !== 'done');
   const finished = rows.filter((r) => r.stage === 'done');
@@ -67,7 +70,7 @@ export default async function DevotionListPage({
         href={`/devotion/start?book=${settings.cursor_book}&chapter=${settings.cursor_chapter}`}
         className="btn-primary w-full py-3"
       >
-        就 {refLabel(settings.cursor_book, settings.cursor_chapter)} 开始灵修
+        就 {startLabel} 开始灵修
       </Link>
 
       {ongoing.length > 0 && (

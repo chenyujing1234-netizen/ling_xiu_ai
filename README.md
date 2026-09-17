@@ -91,18 +91,21 @@ apt-get install -y ffmpeg
 
 # 2. 配置环境变量
 cp .env.example .env.local
-# 编辑 .env.local，至少填 AUTH_SECRET 和 AI_API_KEY
+# 编辑 .env.local，至少填 AUTH_SECRET、AI_API_KEY 和 MYSQL_* 这几项
 #   生成 AUTH_SECRET： openssl rand -base64 48
 
-# 3. 下载并导入圣经文本（约 2 分钟，会下 31101 节中文 + 英文对照）
-npm run bible:fetch
+# 3. 建表（MySQL 库要先建好，脚本只建表不建库）
 npm run db:init
+npm run db:show          # 看看 16 张表和各表行数
+
+# 4. 下载并导入圣经文本（约 3 分钟，31101 节中文 + 英文对照）
+npm run bible:fetch
 npm run bible:import
 
-# 4. 创建第一个管理员（界面上没有注册入口，只能这样建）
-node scripts/create-admin.mjs 13800000000 你的名字
+# 5. 创建第一个管理员（界面上没有注册入口，只能这样建）
+npm run admin:create 13800000000 你的名字
 
-# 5. 启动
+# 6. 启动
 npm run build && npm start
 # 开发模式： npm run dev
 ```
@@ -266,11 +269,38 @@ certbot certonly --webroot -w /var/www/certbot -d lingxiu.example.com \
 
 ### 数据与备份
 
-全部数据在 `data/` 下，直接备份这个目录即可：
+用户、笔记、灵修、经文、AI 缓存都在 MySQL 里，只有图片和早期录音还在本机磁盘：
 
-- `data/lingxiu.db` — SQLite 主库（用户、笔记、灵修、缓存）
+- MySQL `ling_xiu_ai` 库 — 16 张表，连接配置在 `.env.local` 的 `MYSQL_*`
 - `data/uploads/` — 早期版本留下的录音（现在口述只存文字，不再新增；`scene/` 子目录是 AI 生成的意境配图）
 - `data/raw/` — 圣经原始 JSON（可随时重新下载）
+- `data/lingxiu.db` — 迁移前的 SQLite 库，**已不再被程序读写**，留着当迁移那一刻的快照
+
+**数据库在另一台机器上，本机不再有实时副本，所以定期导出这件事从"建议"变成了"必须"：**
+
+```bash
+npm run db:backup     # 导出到 backup/ling_xiu_ai-<时间>.sql.gz，自动只留最近 30 份
+
+# 挂到 crontab，每天凌晨 3 点自动备一次
+0 3 * * * cd /home/chenyj/ling_xiu_ai && bash scripts/mysql-backup.sh >> data/backup.log 2>&1
+```
+
+还原：`zcat backup/ling_xiu_ai-20260918-011426.sql.gz | mysql -h <host> -u <user> -p <库名>`
+
+另外两件跟着变的事：
+
+- **数据库连不上，整个站就打不开**。以前读的是本机文件，几乎不会因网络出问题；现在每个请求都要走网络，机器、网络、账号任一环出问题都会导致整站不可用。
+- **每次查询多约 14ms 的往返**（实测 ping 13.6ms）。所以同一个请求里的多条查询都改成了并发发出，`contextWindow` 之类原本逐节查询的地方也改成了一次范围查询 —— 不然前后各 10 节就是四十多次往返。
+
+### 从 SQLite 迁过来（一次性）
+
+老库还在的话，数据可以整套搬过去，可重复执行（每次都是先清空再灌）：
+
+```bash
+npm run db:init        # 先建表
+npm run db:migrate     # 搬数据，31101 节经文约 22 秒
+npm run db:diff        # 逐表比对两边行数
+```
 
 ---
 
@@ -280,8 +310,9 @@ certbot certonly --webroot -w /var/www/certbot -d lingxiu.example.com \
 src/
   middleware.ts          全站鉴权 + 强制改密（Edge 层，未登录看不到任何界面）
   lib/
-    schema.sql           16 张表的完整结构
-    db.ts                SQLite 连接
+    schema.mysql.sql     16 张表的完整结构（MySQL 8）
+    schema.sql           迁移前的 SQLite 结构，仅作对照留存
+    db.ts                MySQL 连接池 + 事务（形状仍是 prepare().get()/all()/run()，只是都要 await）
     auth.ts              scrypt 密码、JWT 会话、登录限流
     ai.ts                AI 适配层（OpenAI 兼容、流式、推理模型处理）
     prompts.ts           提示词体系 —— 产品的灵魂在这里
@@ -307,8 +338,12 @@ src/
     api/                 全部接口
 scripts/
   fetch-bible.mjs        下载经文（并发 + 断点续传）
-  import-bible.mjs       导入 SQLite（清理译者补字标签、脚注、Strong 编号）
-  init-db.mjs            建库
+  import-bible.mjs       导入经文（清理译者补字标签、脚注、Strong 编号）
+  mysql-init.mjs         建表（--show 看各表行数）
+  mysql-migrate.mjs      从 SQLite 搬数据（--check 比对行数）
+  mysql-backup.sh        导出备份，保留最近 30 份
+  db.mjs                 运维脚本共用的连接
+  check-db.mjs           数据库自检：登录、读经、笔记、灵修门禁共 52 项
   create-admin.mjs       创建管理员
 docs/
   需求规格说明书.md
@@ -343,6 +378,14 @@ docs/
 **"读过"的判定**：完成灵修的创世记 22 章 `engaged=1`，只翻过没互动的约翰福音 3 章 `engaged=0`。
 
 **其它**：中英对照逐节正确；上下文窗口正确跨章（约 3:16 → 前到 3:6、后到 3:26）；知识图谱 15 节点 22 边无孤立节点无非法边；思维导图 3 层 20 叶子；洞察缓存二次命中 0.01s；移动端底部 Tab、安全区、`viewport-fit=cover` 均到位。
+
+**换到 MySQL 之后重新跑了一遍**（`npm run db:check`，52 项全过）：
+
+- 数据一字不差：全库中文 1,057,319 字、英文 4,111,929 字，两边总字数完全一致；最长的一节（以斯帖记 8:9，英文 528 字）逐字比对通过
+- 时间字段读出来仍是 `'2026-09-18 01:10:53'` 这样的字符串，`created_at.slice(0, 16)` 这类既有写法不受影响
+- 唯一键与外键都在起作用：重复打开同一章不报错（`INSERT IGNORE`）、写笔记把当天该章升级成 `engaged=1`（`ON DUPLICATE KEY`）、删用户会级联清掉他的灵修与读经记录
+- 七步门禁、未解锁不给引导、阶段错配被拒这些核心约束，全部照旧拦得住
+- 页面响应：首页 190ms、读经取整章 54ms、灵修详情（7 项并发查询）134ms
 
 ---
 

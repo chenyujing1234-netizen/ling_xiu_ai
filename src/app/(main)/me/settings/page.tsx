@@ -4,8 +4,8 @@ import SettingsForm from '@/components/SettingsForm';
 
 export default async function SettingsPage() {
   const session = await getSession();
-  const settings = getSettings(session!.uid);
-  const books = allBooks().map((b) => ({ id: b.id, name: b.name_cn, chapters: b.chapters }));
+  const [settings, bookList] = await Promise.all([getSettings(session!.uid), allBooks()]);
+  const books = bookList.map((b) => ({ id: b.id, name: b.name_cn, chapters: b.chapters }));
 
   return (
     <div className="px-4 py-5">

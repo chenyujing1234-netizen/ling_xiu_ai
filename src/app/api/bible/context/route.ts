@@ -10,10 +10,13 @@ export async function GET(req: Request) {
     const chapter = intParam(req, 'chapter');
     const verse = intParam(req, 'verse');
 
-    const target = getVerse(bookId, chapter, verse);
+    const [target, { before, after }, ref] = await Promise.all([
+      getVerse(bookId, chapter, verse),
+      contextWindow(bookId, chapter, verse, 10),
+      refLabel(bookId, chapter, verse),
+    ]);
     if (!target) notFound('没有这一节');
 
-    const { before, after } = contextWindow(bookId, chapter, verse, 10);
-    return { ref: refLabel(bookId, chapter, verse), target, before, after };
+    return { ref, target, before, after };
   });
 }

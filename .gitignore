@@ -12,13 +12,15 @@ next-env.d.ts
 # 手工改配置时留下的备份同样含 key，别让它漏进版本库
 .env*.bak*
 
-# 运行期数据（数据库、圣经原始数据、用户上传的录音）
+# 运行期数据（旧的 SQLite 文件、圣经原始数据、用户上传的录音）
 data/*.db
 data/*.db-shm
 data/*.db-wal
 data/raw/
 # 录音笔记是用户的私密内容，绝不能进版本库
 data/uploads/
+# 数据库导出：含全部用户笔记与密码哈希，同样不能进版本库
+backup/
 
 .DS_Store
 *.log

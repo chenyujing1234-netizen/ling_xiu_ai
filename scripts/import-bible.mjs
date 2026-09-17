@@ -1,14 +1,12 @@
 /**
- * 把 data/raw/ 的经文导入 SQLite。
+ * 把 data/raw/ 的经文导入 MySQL。
  * 中文 CUNPS（新标点和合本简体） → cn 列；英文 KJV → en 列。
  * 只导入正典 66 卷（原始数据源含次经，一并过滤）。
  */
-import Database from 'better-sqlite3';
 import { readFileSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { connect, ROOT } from './db.mjs';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RAW = join(ROOT, 'data', 'raw');
 
 // 缩写与文体分类：用于目录页分组与 AI 提示中的体裁判断
@@ -65,57 +63,59 @@ const cn = loadTranslation('CUNPS');
 const en = loadTranslation('KJV');
 console.log(`中文 ${cn.size} 卷 / 英文 ${en.size} 卷`);
 
-const conn = new Database(process.env.DB_PATH || join(ROOT, 'data', 'lingxiu.db'));
-conn.pragma('foreign_keys = OFF');
-conn.exec(readFileSync(join(ROOT, 'src', 'lib', 'schema.sql'), 'utf8'));
+const conn = await connect();
 
-const upsertBook = conn.prepare(`
+const BOOK_SQL = `
   INSERT INTO bible_books (id, name_cn, name_en, abbr_cn, chapters, testament, genre)
   VALUES (?, ?, ?, ?, ?, ?, ?)
-  ON CONFLICT(id) DO UPDATE SET
-    name_cn=excluded.name_cn, name_en=excluded.name_en, abbr_cn=excluded.abbr_cn,
-    chapters=excluded.chapters, testament=excluded.testament, genre=excluded.genre
-`);
-const upsertVerse = conn.prepare(`
-  INSERT INTO bible_verses (book_id, chapter, verse, cn, en) VALUES (?, ?, ?, ?, ?)
-  ON CONFLICT(book_id, chapter, verse) DO UPDATE SET
-    cn = CASE WHEN excluded.cn <> '' THEN excluded.cn ELSE bible_verses.cn END,
-    en = CASE WHEN excluded.en <> '' THEN excluded.en ELSE bible_verses.en END
-`);
+  ON DUPLICATE KEY UPDATE
+    name_cn=VALUES(name_cn), name_en=VALUES(name_en), abbr_cn=VALUES(abbr_cn),
+    chapters=VALUES(chapters), testament=VALUES(testament), genre=VALUES(genre)`;
+// 空串不要覆盖已有译文：两个译本分别导入时，后一次不该把前一次抹掉
+const VERSE_SQL = `
+  INSERT INTO bible_verses (book_id, chapter, verse, cn, en) VALUES ?
+  ON DUPLICATE KEY UPDATE
+    cn = IF(VALUES(cn) <> '', VALUES(cn), bible_verses.cn),
+    en = IF(VALUES(en) <> '', VALUES(en), bible_verses.en)`;
 
 let verseCount = 0;
 let missingEn = 0;
+const BATCH = 500; // 一次几万行会超 max_allowed_packet
 
-conn.transaction(() => {
-  for (let id = 1; id <= 66; id++) {
-    const c = cn.get(id);
-    const e = en.get(id);
-    if (!c) {
-      console.warn(`跳过第 ${id} 卷：无中文数据`);
-      continue;
-    }
-    const [abbr, testament, genre] = META[id - 1];
-    upsertBook.run(id, c.name, e?.name ?? c.name, abbr, c.chapters.length, testament, genre);
+for (let id = 1; id <= 66; id++) {
+  const c = cn.get(id);
+  const e = en.get(id);
+  if (!c) {
+    console.warn(`跳过第 ${id} 卷：无中文数据`);
+    continue;
+  }
+  const [abbr, testament, genre] = META[id - 1];
+  await conn.query(BOOK_SQL, [id, c.name, e?.name ?? c.name, abbr, c.chapters.length, testament, genre]);
 
-    // 以中文为基准逐节对齐英文（同一节号）
-    const enIndex = new Map();
-    for (const ch of e?.chapters ?? []) {
-      for (const v of ch.verses) enIndex.set(`${ch.chapter}:${v.verse}`, clean(v.text));
-    }
-    for (const ch of c.chapters) {
-      for (const v of ch.verses) {
-        const enText = enIndex.get(`${ch.chapter}:${v.verse}`) ?? '';
-        if (!enText) missingEn++;
-        upsertVerse.run(id, ch.chapter, v.verse, clean(v.text), enText);
-        verseCount++;
-      }
+  // 以中文为基准逐节对齐英文（同一节号）
+  const enIndex = new Map();
+  for (const ch of e?.chapters ?? []) {
+    for (const v of ch.verses) enIndex.set(`${ch.chapter}:${v.verse}`, clean(v.text));
+  }
+  const rows = [];
+  for (const ch of c.chapters) {
+    for (const v of ch.verses) {
+      const enText = enIndex.get(`${ch.chapter}:${v.verse}`) ?? '';
+      if (!enText) missingEn++;
+      rows.push([id, ch.chapter, v.verse, clean(v.text), enText]);
+      verseCount++;
     }
   }
-})();
+  for (let i = 0; i < rows.length; i += BATCH) {
+    await conn.query(VERSE_SQL, [rows.slice(i, i + BATCH)]);
+  }
+}
 
-conn.pragma('foreign_keys = ON');
-const stat = conn.prepare(`SELECT COUNT(*) n, SUM(en <> '') withEn FROM bible_verses`).get();
+const [[stat]] = await conn.query(`SELECT COUNT(*) n, SUM(en <> '') withEn FROM bible_verses`);
 console.log(`导入完成：${verseCount} 节写入，库内共 ${stat.n} 节，其中 ${stat.withEn} 节有英文对照`);
 if (missingEn) console.log(`（${missingEn} 节无对应英文，通常是节号切分差异，属正常）`);
-console.log(conn.prepare(`SELECT cn, en FROM bible_verses WHERE book_id=43 AND chapter=3 AND verse=16`).get());
-conn.close();
+const [[sample]] = await conn.query(
+  `SELECT cn, en FROM bible_verses WHERE book_id=43 AND chapter=3 AND verse=16`,
+);
+console.log(sample);
+await conn.end();

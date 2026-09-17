@@ -38,7 +38,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   return handler(async () => {
     const session = await requireSession();
     const id = Number((await ctx.params).id);
-    const d = getDevotion(id, session.uid);
+    const d = await getDevotion(id, session.uid);
     if (!d) notFound('灵修记录不存在');
 
     const payload = await body(req, Schema);
@@ -56,19 +56,23 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         if (d.stage !== 'done' && !allowed[payload.kind].includes(d.stage)) {
           throw new HttpError(409, `当前阶段不能提交「${payload.kind}」`);
         }
-        addInput(d.id, payload.kind, payload.content, {
+        await addInput(d.id, payload.kind, payload.content, {
           promptId: payload.promptId ?? null,
           refVerse: payload.refVerse ?? null,
         });
-        const fresh = getDevotion(d.id, session.uid)!;
-        return { ok: true, gate: canAdvance(fresh), inputs: inputsOf(d.id) };
+        const fresh = (await getDevotion(d.id, session.uid))!;
+        return { ok: true, gate: await canAdvance(fresh), inputs: await inputsOf(d.id) };
       }
 
       case 'removeInput': {
-        db()
+        await db()
           .prepare(`DELETE FROM devotion_inputs WHERE id = ? AND devotion_id = ?`)
           .run(payload.inputId, d.id);
-        return { ok: true, inputs: inputsOf(d.id), gate: canAdvance(getDevotion(d.id, session.uid)!) };
+        return {
+          ok: true,
+          inputs: await inputsOf(d.id),
+          gate: await canAdvance((await getDevotion(d.id, session.uid))!),
+        };
       }
 
       case 'prompts':
@@ -76,14 +80,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
       case 'score': {
         // 必须先有作答才能评分
-        const gate = canAdvance({ ...d, stage: 'reflect', score: 0, unlocked: 0 });
+        const gate = await canAdvance({ ...d, stage: 'reflect', score: 0, unlocked: 0 });
         if (!gate.ok && gate.reason?.includes('请先回答')) bad(gate.reason);
         const result = await scoreDevotion(d);
         return result;
       }
 
       case 'guide': {
-        const fresh = getDevotion(d.id, session.uid)!;
+        const fresh = (await getDevotion(d.id, session.uid))!;
         // R-D2：没达到分数线，不给引导。这是产品的核心约束，服务端硬拦。
         if (!fresh.unlocked) {
           throw new HttpError(
@@ -91,40 +95,40 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
             '还没有解锁。请先写下你自己的观察、提问与作答，评估达标后才会开启引导。',
           );
         }
-        const existing = db()
+        const existing = await db()
           .prepare(`SELECT content FROM coach_messages WHERE devotion_id = ? AND role='coach' ORDER BY id LIMIT 1`)
-          .get(d.id) as { content: string } | undefined;
+          .get<{ content: string }>(d.id);
         if (existing) return { guidance: existing.content, cached: true };
 
         const guidance = await generateGuidance(fresh);
-        if (fresh.stage === 'reflect') setStage(d.id, 'guided');
+        if (fresh.stage === 'reflect') await setStage(d.id, 'guided');
         return { guidance, cached: false };
       }
 
       case 'coach': {
-        const fresh = getDevotion(d.id, session.uid)!;
+        const fresh = (await getDevotion(d.id, session.uid))!;
         if (!fresh.unlocked) throw new HttpError(403, '尚未解锁引导');
         return { reply: await coachReply(fresh, payload.text) };
       }
 
       case 'advance': {
-        const fresh = getDevotion(d.id, session.uid)!;
-        const gate = canAdvance(fresh);
+        const fresh = (await getDevotion(d.id, session.uid))!;
+        const gate = await canAdvance(fresh);
         if (!gate.ok) throw new HttpError(409, gate.reason ?? '还不能进入下一步');
         const next = nextStage(fresh.stage);
         if (next === 'done') {
-          completeDevotion(fresh);
+          await completeDevotion(fresh);
         } else {
-          setStage(fresh.id, next);
+          await setStage(fresh.id, next);
         }
         return { stage: next };
       }
 
       case 'complete': {
-        const fresh = getDevotion(d.id, session.uid)!;
-        const gate = canAdvance(fresh);
+        const fresh = (await getDevotion(d.id, session.uid))!;
+        const gate = await canAdvance(fresh);
         if (!gate.ok) throw new HttpError(409, gate.reason ?? '还有步骤没有完成');
-        completeDevotion(fresh);
+        await completeDevotion(fresh);
         return { stage: 'done' };
       }
     }

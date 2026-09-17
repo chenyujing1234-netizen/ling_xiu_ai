@@ -15,9 +15,9 @@ export async function POST(req: Request) {
   return handler(async () => {
     const session = await requireSession();
     const d = await body(req, Schema);
-    const current = getSettings(session.uid);
+    const current = await getSettings(session.uid);
 
-    db()
+    await db()
       .prepare(
         `UPDATE reading_settings
          SET daily_chapters = ?, cursor_book = ?, cursor_chapter = ?, bilingual = ?
@@ -31,6 +31,6 @@ export async function POST(req: Request) {
         session.uid,
       );
 
-    return { settings: getSettings(session.uid) };
+    return { settings: await getSettings(session.uid) };
   });
 }

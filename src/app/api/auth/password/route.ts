@@ -14,14 +14,14 @@ export async function POST(req: Request) {
     const session = await requireSession();
     const { current, next } = await body(req, Schema);
 
-    const row = db()
+    const row = (await db()
       .prepare(`SELECT password_hash, name, role FROM users WHERE id = ?`)
-      .get(session.uid) as { password_hash: string; name: string; role: string };
+      .get<{ password_hash: string; name: string; role: string }>(session.uid))!;
 
     if (!verifyPassword(current, row.password_hash)) bad('当前密码不正确');
     if (verifyPassword(next, row.password_hash)) bad('新密码不能与当前密码相同');
 
-    db()
+    await db()
       .prepare(`UPDATE users SET password_hash = ?, must_change_pw = 0 WHERE id = ?`)
       .run(hashPassword(next), session.uid);
 

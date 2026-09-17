@@ -19,15 +19,15 @@ export async function POST(req: Request) {
     const data = await body(req, Schema);
     const conn = db();
 
-    const existingUser = conn.prepare(`SELECT id FROM users WHERE phone = ?`).get(data.phone);
+    const existingUser = await conn.prepare(`SELECT id FROM users WHERE phone = ?`).get(data.phone);
     if (existingUser) bad('该手机号已经开通，请直接登录');
 
-    const pending = conn
+    const pending = await conn
       .prepare(`SELECT id FROM access_requests WHERE phone = ? AND status = 'pending'`)
       .get(data.phone);
     if (pending) bad('你的申请已提交，请等待管理员审批');
 
-    conn
+    await conn
       .prepare(
         `INSERT INTO access_requests (phone, name, church, note) VALUES (?, ?, ?, ?)`,
       )

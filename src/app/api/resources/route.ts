@@ -24,7 +24,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     if (!url.searchParams.get('book')) {
       return {
-        resources: db()
+        resources: await db()
           .prepare(
             `SELECT r.*, b.name_cn AS book_name FROM sermon_resources r
              JOIN bible_books b ON b.id = r.book_id ORDER BY r.id DESC LIMIT 200`,
@@ -35,7 +35,7 @@ export async function GET(req: Request) {
     const bookId = intParam(req, 'book');
     const chapter = intParam(req, 'chapter');
     return {
-      resources: db()
+      resources: await db()
         .prepare(
           `SELECT * FROM sermon_resources WHERE book_id = ? AND chapter = ? ORDER BY id DESC`,
         )
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
   return handler(async () => {
     const session = await requireAdmin();
     const d = await body(req, Schema);
-    const info = db()
+    const info = await db()
       .prepare(
         `INSERT INTO sermon_resources
            (title, speaker, source, url, book_id, chapter, verse_start, verse_end, start_sec, end_sec, note, created_by)
@@ -76,7 +76,7 @@ export async function DELETE(req: Request) {
   return handler(async () => {
     await requireAdmin();
     const id = intParam(req, 'id');
-    const info = db().prepare(`DELETE FROM sermon_resources WHERE id = ?`).run(id);
+    const info = await db().prepare(`DELETE FROM sermon_resources WHERE id = ?`).run(id);
     if (!info.changes) throw new HttpError(404, '资源不存在');
     return { ok: true };
   });

@@ -15,7 +15,7 @@ const StartSchema = z.object({
 export async function GET() {
   return handler(async () => {
     const session = await requireSession();
-    const list = db()
+    const list = await db()
       .prepare(
         `SELECT d.id, d.day, d.book_id, b.name_cn AS book_name, d.chapter, d.verse_start, d.verse_end,
                 d.stage, d.score, d.unlocked, d.completed_at, d.created_at,
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
   return handler(async () => {
     const session = await requireSession();
     const { bookId, chapter, from, to } = await body(req, StartSchema);
-    const d = getOrCreateDevotion(session.uid, bookId, chapter, from ?? 1, to ?? 0);
+    const d = await getOrCreateDevotion(session.uid, bookId, chapter, from ?? 1, to ?? 0);
     return { id: d.id, stage: d.stage };
   });
 }

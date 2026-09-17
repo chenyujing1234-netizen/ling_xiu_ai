@@ -104,9 +104,9 @@ export async function getSession(): Promise<Session | null> {
   const s = await readSessionToken(token);
   if (!s) return null;
   // 校验用户仍然存在且未被停用（避免停用后旧 token 继续可用）
-  const row = db()
+  const row = await db()
     .prepare(`SELECT status, role, must_change_pw FROM users WHERE id = ?`)
-    .get(s.uid) as { status: string; role: string; must_change_pw: number } | undefined;
+    .get<{ status: string; role: string; must_change_pw: number }>(s.uid);
   if (!row || row.status !== 'active') return null;
   return {
     ...s,
@@ -139,20 +139,24 @@ export class HttpError extends Error {
 const MAX_FAILS = 5;
 const WINDOW_MINUTES = 15;
 
-export function tooManyAttempts(phone: string): boolean {
-  const row = db()
+export async function tooManyAttempts(phone: string): Promise<boolean> {
+  // 时间窗口直接写进 SQL：INTERVAL 的单位不能用占位符，
+  // 而 WINDOW_MINUTES 是本文件里的常量，不经用户输入
+  const row = await db()
     .prepare(
       `SELECT COUNT(*) n FROM login_attempts
-       WHERE phone = ? AND ok = 0 AND at > datetime('now','localtime',?)`,
+       WHERE phone = ? AND \`ok\` = 0 AND \`at\` > NOW() - INTERVAL ${WINDOW_MINUTES} MINUTE`,
     )
-    .get(phone, `-${WINDOW_MINUTES} minutes`) as { n: number };
-  return row.n >= MAX_FAILS;
+    .get<{ n: number }>(phone);
+  return (row?.n ?? 0) >= MAX_FAILS;
 }
 
-export function recordAttempt(phone: string, ok: boolean) {
-  db().prepare(`INSERT INTO login_attempts (phone, ok) VALUES (?, ?)`).run(phone, ok ? 1 : 0);
+export async function recordAttempt(phone: string, ok: boolean) {
+  await db()
+    .prepare('INSERT INTO login_attempts (phone, `ok`) VALUES (?, ?)')
+    .run(phone, ok ? 1 : 0);
 }
 
-export function findUserByPhone(phone: string): UserRow | undefined {
-  return db().prepare(`SELECT * FROM users WHERE phone = ?`).get(phone) as UserRow | undefined;
+export async function findUserByPhone(phone: string): Promise<UserRow | undefined> {
+  return await db().prepare(`SELECT * FROM users WHERE phone = ?`).get<UserRow>(phone);
 }

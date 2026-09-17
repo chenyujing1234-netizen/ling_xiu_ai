@@ -32,21 +32,21 @@ export async function GET(req: Request) {
 
     if (kind === 'context') {
       const verse = intParam(req, 'verse');
-      if (cacheOnly && !isCached(bookId, chapter, kind, { verse })) return { kind, data: null };
+      if (cacheOnly && !(await isCached(bookId, chapter, kind, { verse }))) return { kind, data: null };
       return { kind, data: await getContextInsight(bookId, chapter, verse, force) };
     }
 
     const from = intParam(req, 'from', 1);
     const to = intParam(req, 'to', 0);
 
-    if (cacheOnly && kind !== 'meta' && !isCached(bookId, chapter, kind, { from, to })) {
+    if (cacheOnly && kind !== 'meta' && !(await isCached(bookId, chapter, kind, { from, to }))) {
       return { kind, data: null };
     }
 
     switch (kind) {
       case 'elements': {
         const data = await getElements(bookId, chapter, from, to, force);
-        const unlocked = hasUnlocked(session.uid, bookId, chapter);
+        const unlocked = await hasUnlocked(session.uid, bookId, chapter);
         if (unlocked) return { kind, data, unlocked };
         // 未解锁：抽掉解读性内容，保留基础事实
         const { thesis, reflection, ...rest } = data;
@@ -64,7 +64,7 @@ export async function GET(req: Request) {
       case 'image':
         return { kind, data: await getSceneImage(bookId, chapter, from, to) };
       case 'meta':
-        return { kind, data: resolveRange(bookId, chapter, from, to) };
+        return { kind, data: await resolveRange(bookId, chapter, from, to) };
       default:
         bad(`未知的 kind: ${kind}`);
     }
@@ -72,8 +72,8 @@ export async function GET(req: Request) {
 }
 
 /** 该用户在这一章是否已经通过自己的思考解锁过 */
-function hasUnlocked(userId: number, bookId: number, chapter: number): boolean {
-  const row = db()
+async function hasUnlocked(userId: number, bookId: number, chapter: number): Promise<boolean> {
+  const row = await db()
     .prepare(
       `SELECT 1 FROM devotions
        WHERE user_id = ? AND book_id = ? AND chapter = ? AND unlocked = 1 LIMIT 1`,

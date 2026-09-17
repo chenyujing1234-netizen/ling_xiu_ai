@@ -6,13 +6,13 @@ import LogoutButton from '@/components/LogoutButton';
 
 export default async function MePage() {
   const session = await getSession();
-  const s = summaryOf(session!.uid);
-  const settings = getSettings(session!.uid);
+  const [s, settings] = await Promise.all([summaryOf(session!.uid), getSettings(session!.uid)]);
+  const cursorLabel = await refLabel(settings.cursor_book, settings.cursor_chapter);
 
   const links = [
     { href: '/me/notes', label: '我的读经笔记', desc: `${s.totalNotes} 条 · ${s.godSpokeCount} 处神对我说话` },
     { href: '/devotion', label: '我的灵修记录', desc: `完成 ${s.totalDevotions} 次 · 平均 ${s.avgScore} 分` },
-    { href: '/me/settings', label: '读经设置', desc: `每日 ${settings.daily_chapters} 章 · 进度在 ${refLabel(settings.cursor_book, settings.cursor_chapter)}` },
+    { href: '/me/settings', label: '读经设置', desc: `每日 ${settings.daily_chapters} 章 · 进度在 ${cursorLabel}` },
     { href: '/me/password', label: '修改密码', desc: '定期更换更安全' },
   ];
 

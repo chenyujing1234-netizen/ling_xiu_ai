@@ -9,7 +9,7 @@ export default async function ReadPage({
 }) {
   const sp = await searchParams;
   const session = await getSession();
-  const settings = getSettings(session!.uid);
+  const settings = await getSettings(session!.uid);
 
   // 没带参数就从他自己的读经游标开始
   const book = Number(sp.book) || settings.cursor_book;

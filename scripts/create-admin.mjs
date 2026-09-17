@@ -6,10 +6,8 @@
  *   node scripts/create-admin.mjs 13800000000 陈弟兄
  *   node scripts/create-admin.mjs 13800000000 陈弟兄 我的密码
  */
-import Database from 'better-sqlite3';
 import { scryptSync, randomBytes } from 'node:crypto';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { connect } from './db.mjs';
 
 const [phone, name, givenPassword] = process.argv.slice(2);
 if (!phone || !name) {
@@ -17,8 +15,7 @@ if (!phone || !name) {
   process.exit(1);
 }
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const conn = new Database(process.env.DB_PATH || join(ROOT, 'data', 'lingxiu.db'));
+const conn = await connect();
 
 function hash(plain) {
   const salt = randomBytes(16).toString('hex');
@@ -31,24 +28,25 @@ function generate(length = 10) {
 }
 
 const password = givenPassword || generate();
-const existing = conn.prepare('SELECT id FROM users WHERE phone = ?').get(phone);
+const [[existing]] = await conn.query('SELECT id FROM users WHERE phone = ?', [phone]);
 
 if (existing) {
-  conn
-    .prepare(`UPDATE users SET name=?, password_hash=?, role='admin', status='active', must_change_pw=0 WHERE id=?`)
-    .run(name, hash(password), existing.id);
+  await conn.query(
+    `UPDATE users SET name=?, password_hash=?, role='admin', status='active', must_change_pw=0 WHERE id=?`,
+    [name, hash(password), existing.id],
+  );
   console.log(`已更新管理员（id=${existing.id}）`);
 } else {
-  const info = conn
-    .prepare(
-      `INSERT INTO users (phone, name, password_hash, role, status, must_change_pw)
-       VALUES (?, ?, ?, 'admin', 'active', 0)`,
-    )
-    .run(phone, name, hash(password));
-  conn
-    .prepare(`INSERT OR IGNORE INTO reading_settings (user_id, daily_chapters) VALUES (?, ?)`)
-    .run(info.lastInsertRowid, Number(process.env.DAILY_CHAPTERS || 4));
-  console.log(`已创建管理员（id=${info.lastInsertRowid}）`);
+  const [info] = await conn.query(
+    `INSERT INTO users (phone, name, password_hash, role, status, must_change_pw)
+     VALUES (?, ?, ?, 'admin', 'active', 0)`,
+    [phone, name, hash(password)],
+  );
+  await conn.query(
+    `INSERT IGNORE INTO reading_settings (user_id, daily_chapters) VALUES (?, ?)`,
+    [info.insertId, Number(process.env.DAILY_CHAPTERS || 4)],
+  );
+  console.log(`已创建管理员（id=${info.insertId}）`);
 }
 
 console.log('----------------------------');
@@ -56,4 +54,4 @@ console.log(`手机号: ${phone}`);
 console.log(`密码:   ${password}`);
 console.log('----------------------------');
 if (!givenPassword) console.log('这是随机生成的密码，请立即记下并登录后修改。');
-conn.close();
+await conn.end();

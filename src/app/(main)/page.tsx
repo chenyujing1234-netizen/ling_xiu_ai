@@ -8,21 +8,22 @@ import { STAGE_META, type Stage } from '@/lib/devotion';
 export default async function TodayPage() {
   const session = await getSession();
   const uid = session!.uid;
-  const settings = getSettings(uid);
-  const summary = summaryOf(uid);
+  const [settings, summary, ongoing] = await Promise.all([
+    getSettings(uid),
+    summaryOf(uid),
+    // 进行中的灵修，方便一键接着做
+    db()
+      .prepare(
+        `SELECT d.id, b.name_cn AS book_name, d.chapter, d.stage FROM devotions d
+         JOIN bible_books b ON b.id = d.book_id
+         WHERE d.user_id = ? AND d.stage <> 'done' ORDER BY d.updated_at DESC LIMIT 3`,
+      )
+      .all<{ id: number; book_name: string; chapter: number; stage: Stage }>(uid),
+  ]);
 
-  const plan = planFrom(settings.cursor_book, settings.cursor_chapter, settings.daily_chapters);
-  const status = chapterStatus(uid, plan);
+  const plan = await planFrom(settings.cursor_book, settings.cursor_chapter, settings.daily_chapters);
+  const status = await chapterStatus(uid, plan);
   const doneCount = status.filter((s) => s.engaged).length;
-
-  // 进行中的灵修，方便一键接着做
-  const ongoing = db()
-    .prepare(
-      `SELECT d.id, b.name_cn AS book_name, d.chapter, d.stage FROM devotions d
-       JOIN bible_books b ON b.id = d.book_id
-       WHERE d.user_id = ? AND d.stage <> 'done' ORDER BY d.updated_at DESC LIMIT 3`,
-    )
-    .all(uid) as { id: number; book_name: string; chapter: number; stage: Stage }[];
 
   const hour = new Date().getHours();
   const greeting = hour < 6 ? '夜深了' : hour < 11 ? '早上好' : hour < 14 ? '午安' : hour < 19 ? '下午好' : '晚上好';
