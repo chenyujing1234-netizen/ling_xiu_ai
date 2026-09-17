@@ -9,13 +9,15 @@ next-env.d.ts
 .env
 .env.local
 .env*.local
+# 手工改配置时留下的备份同样含 key，别让它漏进版本库
+.env*.bak*
 
-# 运行期数据（数据库、圣经原始数据、用户上传的录音与手写图）
+# 运行期数据（数据库、圣经原始数据、用户上传的录音）
 data/*.db
 data/*.db-shm
 data/*.db-wal
 data/raw/
-# 录音与手写笔记是用户的私密内容，绝不能进版本库
+# 录音笔记是用户的私密内容，绝不能进版本库
 data/uploads/
 
 .DS_Store

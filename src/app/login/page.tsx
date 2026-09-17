@@ -9,11 +9,11 @@ export default function LoginPage() {
         <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-500 text-2xl text-white shadow-soft">
           ✦
         </div>
-        <h1 className="text-[26px] font-semibold tracking-tight">灵修AI</h1>
+        <h1 className="text-[26px] font-semibold tracking-tight">晨光</h1>
         <p className="mt-2 text-[15px] leading-relaxed text-muted">
-          读经不止于读过。
+          一天里最安静的那段时间。
           <br />
-          先思考，再领受。
+          慢一点，想深一点。
         </p>
       </header>
 

@@ -78,6 +78,6 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // 排除静态资源与上传的音频/手写图
+  // 排除静态资源与上传的音频
   matcher: ['/((?!_next/static|_next/image|favicon.ico|uploads/|manifest.webmanifest|icon.svg).*)'],
 };

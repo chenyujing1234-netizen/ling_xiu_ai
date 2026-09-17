@@ -3,7 +3,7 @@ import { readMedia, ownerOf } from '@/lib/media';
 import { NextResponse } from 'next/server';
 
 /**
- * 鉴权后返回私密媒体（录音、手写图）。
+ * 鉴权后返回私密媒体（历史录音）。
  *
  * 严格限本人：灵修录音与祷告是极私密的东西，管理员也不例外。
  * 管理员的职责是审批账号与维护资源，不包括旁听别人的祷告。

@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: '灵修AI · 读经不止于读过',
-  description: '带约束的引导式圣经读经灵修工具',
+  title: '晨光 · 一天里最安静的那段时间',
+  description: '每天安静阅读与记录的小工具',
 };
 
 export const viewport: Viewport = {

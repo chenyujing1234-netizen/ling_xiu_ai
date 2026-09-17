@@ -58,7 +58,7 @@ export default async function MyNotesPage({
         <p className="card px-4 py-8 text-center text-sm leading-relaxed text-muted">
           还没有笔记。
           <br />
-          在读经页长按任意一节，就能录音、手写或写下想法。
+          在读经页长按任意一节，就能口述或写下想法。
         </p>
       ) : (
         <ul className="space-y-2.5">
@@ -80,14 +80,6 @@ export default async function MyNotesPage({
               {n.content && <p className="text-[14px] leading-relaxed">{n.content}</p>}
               {n.kind === 'audio' && n.media_path && (
                 <audio src={`/api/media/${n.media_path}`} controls className="mt-2 h-9 w-full" />
-              )}
-              {n.kind === 'handwriting' && n.media_path && (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={`/api/media/${n.media_path}`}
-                  alt="手写笔记"
-                  className="mt-2 rounded-lg border border-line"
-                />
               )}
             </li>
           ))}

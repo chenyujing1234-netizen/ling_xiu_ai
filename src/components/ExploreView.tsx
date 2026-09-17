@@ -410,7 +410,14 @@ function ImagePanel({ book, chapter, label }: { book: number; chapter: number; l
         data.url ? (
           <figure>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={data.url} alt={`${label} 意境配图`} className="w-full rounded-2xl border border-line" />
+            <img
+              src={data.url}
+              alt={`${label} 意境配图`}
+              width={1024}
+              height={1024}
+              decoding="async"
+              className="aspect-square w-full rounded-2xl border border-line bg-line/30 object-cover"
+            />
             <figcaption className="mt-2 text-center text-xs text-muted">
               {label} · AI 生成的意境画面，非历史考据插图
             </figcaption>

@@ -83,16 +83,16 @@ CREATE TABLE IF NOT EXISTS reading_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_log_user_day ON reading_logs(user_id, day DESC);
 
--- 逐节笔记：长按经文产生（文字 / 录音 / 手写）
+-- 逐节笔记：长按经文产生（文字 / 历史录音）
 CREATE TABLE IF NOT EXISTS verse_notes (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   book_id      INTEGER NOT NULL,
   chapter      INTEGER NOT NULL,
   verse        INTEGER NOT NULL,
-  kind         TEXT NOT NULL,             -- text | audio | handwriting
+  kind         TEXT NOT NULL,             -- text | audio（audio 为历史数据，现在只写 text）
   content      TEXT NOT NULL DEFAULT '',  -- 文字内容 / 录音转写文字
-  media_path   TEXT,                      -- 音频或手写图片的相对路径
+  media_path   TEXT,                      -- 历史音频的相对路径
   duration_ms  INTEGER,
   god_spoke    INTEGER NOT NULL DEFAULT 0,-- "这节神对我说话"
   devotion_id  INTEGER REFERENCES devotions(id) ON DELETE SET NULL,

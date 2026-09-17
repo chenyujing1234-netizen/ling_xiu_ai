@@ -43,9 +43,9 @@
 ### 2. 读经
 
 - 中文（新标点和合本简体）与英文（KJV）**逐节对照**
-- **长按任意一节** → 录音笔记 / 手写笔记 / 文字笔记 / 标记"这节神对我说话"
+- **长按任意一节** → 口述笔记 / 文字笔记 / 标记"这节神对我说话"
 - **上下文透视**：该节的前 10 节与后 10 节（自动跨章节边界），以及 AI 分析前文如何铺垫、后文如何回应、脱离上下文最常见的误读、中英译文的用词差异
-- 录音自动尝试转写为文字，转写失败也不影响录音留存
+- 口述笔记**按住说话、松开即转成文字**，音频只在内存里中转送去识别，不落盘、不入库；转出的文字落到输入框里，本人过一眼改掉错字再保存
 
 ### 3. 发现
 
@@ -74,7 +74,7 @@ AI 出的题一律是**主观思辨题**，禁止选择题、禁止唯一正确�
 - 没有自助注册。用户在 `/apply` 提交手机号 → 管理员在后台审批 → 系统生成初始密码，**只显示一次**，由管理员通过微信/电话线下告知
 - 不发短信、不发邮件、不接微信登录
 - 首次登录强制改密；登录失败 5 次锁 15 分钟
-- **录音与手写笔记严格限本人访问，管理员也看不到** —— 祷告是私密的
+- **录音笔记严格限本人访问，管理员也看不到** —— 祷告是私密的
 
 ---
 
@@ -115,7 +115,9 @@ AI_API_KEY=
 AI_MODEL=deepseek-v4-pro          # 主模型：引导对话，质量优先
 AI_MODEL_FAST=deepseek-v4.1-flash # 快模型：出题、评分、结构化抽取
 AI_MODEL_IMAGE=wan2.7-image       # 文生图，留空则关闭意境配图
-AI_MODEL_AUDIO=qwen-audio-3.0-realtime-plus  # 录音转写，留空则只存音频
+AI_ASR_MODEL=                     # 语音转文字，留空则口述功能不可用（见下）
+AI_ASR_BASE_URL=                  # 留空沿用 AI_BASE_URL
+AI_ASR_API_KEY=                   # 留空沿用 AI_API_KEY
 DEVOTION_UNLOCK_SCORE=60  # 解锁引导所需分数
 DAILY_CHAPTERS=4          # 每日默认读经章数
 ```
@@ -146,6 +148,29 @@ DAILY_CHAPTERS=4          # 每日默认读经章数
 
 1. **端点不是 `/images/generations`**。那个路径和原生 `text2image` 都返回 `url error, please check url`，异步提交还会被拒（`AccessDenied: current user api does not support asynchronous calls`）。实测唯一可用的是多模态生成端点 `/api/v1/services/aigc/multimodal-generation/generation`，同步返回图片链接。代码里按 `AI_BASE_URL` 自动推导，可用 `AI_IMAGE_URL` 覆盖。
 2. **返回的链接只有 23 小时有效期**。直接把它存进缓存，第二天就是一张裂图，所以生成后立刻下载落地到 `data/uploads/scene/`，库里存的是本站地址 `/api/scene/<name>.png`。
+
+### 语音转文字（口述笔记）
+
+口述只保留识别出的文字、**不保存音频文件**，所以这套配置不通，口述功能就直接不可用（界面会明确提示原因，不会悄悄失败）。
+
+需要单独配一套服务：默认那套 tokenplan **没有语音识别能力**，实测四条路全不通 ——
+
+| 尝试 | 结果 |
+|---|---|
+| `/audio/transcriptions` | `400 Model not exist`，两个音频模型都不认 |
+| `/chat/completions` 传音频 | `200` 但只回空壳 `{"status_message":"Success."}` |
+| 多模态生成端点传音频 | 同上 |
+| realtime WebSocket（三个候选地址） | 全部连不上 |
+
+它只有 `tts-plus`（文字转语音）与 `realtime-plus`（实时对话，仅 WebSocket 且不可达），都不是转写。所以请填一套支持 OpenAI 兼容 `/audio/transcriptions` 的服务（阿里百炼主账号，或任何提供 whisper / SenseVoice 的服务商）：
+
+```bash
+# 填好 .env.local 的 AI_ASR_* 之后自查，能区分端点不对／鉴权不过／模型名不对
+node scripts/check-asr.mjs
+
+# 想顺带看识别质量，用一段真实录音
+node scripts/check-asr.mjs my.wav
+```
 
 ### AI 不可用时
 
@@ -226,14 +251,14 @@ certbot certonly --webroot -w /var/www/certbot -d lingxiu.example.com \
 <web-view src="https://你的域名/"></web-view>
 ```
 
-注意 `web-view` 内的录音权限受微信版本限制，若不可用，用户仍可用手写或文字笔记。
+注意 `web-view` 内的录音权限受微信版本限制，若不可用，用户仍可用文字笔记。
 
 ### 数据与备份
 
 全部数据在 `data/` 下，直接备份这个目录即可：
 
 - `data/lingxiu.db` — SQLite 主库（用户、笔记、灵修、缓存）
-- `data/uploads/` — 录音与手写图片（`scene/` 子目录是 AI 生成的意境配图）
+- `data/uploads/` — 早期版本留下的录音（现在口述只存文字，不再新增；`scene/` 子目录是 AI 生成的意境配图）
 - `data/raw/` — 圣经原始 JSON（可随时重新下载）
 
 ---
@@ -258,8 +283,7 @@ src/
     DevotionFlow.tsx     七阶段灵修界面
     Reader.tsx           读经器（长按、中英对照）
     NoteSheet.tsx        长按弹出的笔记面板
-    Recorder.tsx         录音
-    Handwriting.tsx      手写画板
+    Recorder.tsx         口述（按住说话，松开转文字）
     KnowledgeGraph.tsx   知识图谱（d3-force）
     Mindmap.tsx          思维导图
     ExploreView.tsx      发现页
@@ -285,7 +309,7 @@ docs/
 **鉴权与隐私**
 - 未登录访问 `/`、`/read`、`/devotion`、`/explore`、`/me`、`/admin` 全部 307 跳登录；API 返回 401
 - 首次登录未改密时，功能页跳改密页、API 返回 403，改密页本身放行（不成环）
-- 成员不能添加讲道资源（403）；录音/手写**管理员访问返回 403**
+- 成员不能添加讲道资源（403）；录音**管理员访问返回 403**
 - 媒体路径做了格式校验，防路径穿越
 
 **约束不可绕过**（直接打 API）

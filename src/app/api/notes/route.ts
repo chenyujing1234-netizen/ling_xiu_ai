@@ -2,8 +2,6 @@ import { z } from 'zod';
 import { handler, body, intParam, bad } from '@/lib/api';
 import { requireSession, HttpError } from '@/lib/auth';
 import { db, today } from '@/lib/db';
-import { saveUpload } from '@/lib/media';
-import { transcribe } from '@/lib/ai';
 
 const TextNote = z.object({
   bookId: z.number().int().positive(),
@@ -50,52 +48,8 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   return handler(async () => {
     const session = await requireSession();
-    const contentType = req.headers.get('content-type') ?? '';
 
-    // ---- 录音或手写：multipart ----
-    if (contentType.includes('multipart/form-data')) {
-      const form = await req.formData();
-      const file = form.get('file');
-      if (!(file instanceof Blob)) bad('缺少文件');
-
-      const kind = String(form.get('kind') ?? '');
-      if (kind !== 'audio' && kind !== 'handwriting') bad('kind 必须是 audio 或 handwriting');
-
-      const bookId = Number(form.get('bookId'));
-      const chapter = Number(form.get('chapter'));
-      const verse = Number(form.get('verse'));
-      if (![bookId, chapter, verse].every((n) => Number.isInteger(n) && n > 0)) bad('经文位置不正确');
-
-      const durationMs = Number(form.get('durationMs')) || null;
-      const devotionId = Number(form.get('devotionId')) || null;
-      const mime = file.type || (kind === 'audio' ? 'audio/webm' : 'image/png');
-
-      let mediaPath: string;
-      try {
-        mediaPath = await saveUpload(session.uid, file, mime);
-      } catch (err) {
-        throw new HttpError(400, (err as Error).message);
-      }
-
-      // 录音顺带尝试转写；失败不影响笔记保存（R-B3）
-      let text = String(form.get('content') ?? '');
-      if (kind === 'audio' && !text) {
-        text = (await transcribe(file, `note.${mime.includes('mp4') ? 'm4a' : 'webm'}`)) ?? '';
-      }
-
-      const info = db()
-        .prepare(
-          `INSERT INTO verse_notes
-             (user_id, book_id, chapter, verse, kind, content, media_path, duration_ms, devotion_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(session.uid, bookId, chapter, verse, kind, text, mediaPath, durationMs, devotionId);
-
-      markEngaged(session.uid, bookId, chapter);
-      return { id: info.lastInsertRowid, mediaPath, content: text, transcribed: Boolean(text) };
-    }
-
-    // ---- 文字笔记：JSON ----
+    // 笔记一律以文字入库：口述先走 /api/transcribe 转成文字，这里不收任何上传文件
     const data = await body(req, TextNote);
     if (!data.content && !data.godSpoke) bad('笔记内容不能为空');
 

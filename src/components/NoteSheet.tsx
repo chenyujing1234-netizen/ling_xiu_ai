@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/client';
 import Recorder from './Recorder';
-import Handwriting from './Handwriting';
 
 export type VerseTarget = {
   bookId: number;
@@ -14,12 +13,11 @@ export type VerseTarget = {
   en: string;
 };
 
-type Tab = 'text' | 'audio' | 'hand' | 'context';
+type Tab = 'text' | 'audio' | 'context';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'text', label: '写下' },
-  { key: 'audio', label: '录音' },
-  { key: 'hand', label: '手写' },
+  { key: 'audio', label: '口述' },
   { key: 'context', label: '上下文' },
 ];
 
@@ -31,7 +29,7 @@ const TABS: { key: Tab; label: string }[] = [
  * "上下文"是查看不是输入，不计入偏好。
  */
 const PREF_KEY = 'lx_note_input';
-const INPUT_TABS: Tab[] = ['text', 'audio', 'hand'];
+const INPUT_TABS: Tab[] = ['text', 'audio'];
 
 function lastUsedInput(): Tab {
   if (typeof window === 'undefined') return 'text';
@@ -54,6 +52,7 @@ export default function NoteSheet({
   const [text, setText] = useState('');
   const [godSpoke, setGodSpoke] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
 
@@ -110,28 +109,28 @@ export default function NoteSheet({
     }
   }
 
-  async function saveMedia(kind: 'audio' | 'handwriting', blob: Blob, durationMs?: number) {
+  /**
+   * 口述转文字。音频只是中转，不保存成文件；
+   * 转出来的字先落到"写下"里由本人过一眼 —— 识别难免有错别字，
+   * 直接入库不如让他顺手改一句。
+   */
+  async function speakToText(blob: Blob) {
     setError('');
-    setBusy(true);
+    setToast('');
+    setTranscribing(true);
     try {
       const form = new FormData();
-      form.append('file', blob, kind === 'audio' ? 'note.webm' : 'note.png');
-      form.append('kind', kind);
-      form.append('bookId', String(target.bookId));
-      form.append('chapter', String(target.chapter));
-      form.append('verse', String(target.verse));
-      if (durationMs) form.append('durationMs', String(Math.round(durationMs)));
-      if (devotionId) form.append('devotionId', String(devotionId));
-
-      const res = await api<{ transcribed?: boolean }>('/api/notes', {
-        method: 'POST',
-        body: form,
-      });
-      done(kind === 'audio' ? (res.transcribed ? '录音已保存并转成文字' : '录音已保存') : '手写已保存');
+      form.append('file', blob, /mp4|m4a|aac/.test(blob.type) ? 'note.m4a' : 'note.webm');
+      const res = await api<{ text: string }>('/api/transcribe', { method: 'POST', body: form });
+      setText((prev) => (prev.trim() ? `${prev.trim()}\n${res.text}` : res.text));
+      // 用 setTab 而非 pickTab：这是转写后的自动跳转，
+      // 不该把"下次默认用哪种输入"从录音改成打字
+      setTab('text');
+      setToast('已转成文字，看看有没有听错，改好再保存');
     } catch (err) {
       setError((err as Error).message);
     } finally {
-      setBusy(false);
+      setTranscribing(false);
     }
   }
 
@@ -203,11 +202,7 @@ export default function NoteSheet({
           )}
 
           {tab === 'audio' && (
-            <Recorder busy={busy} onDone={(blob, ms) => saveMedia('audio', blob, ms)} />
-          )}
-
-          {tab === 'hand' && (
-            <Handwriting busy={busy} onDone={(blob) => saveMedia('handwriting', blob)} />
+            <Recorder busy={transcribing} onDone={speakToText} />
           )}
 
           {tab === 'context' && <ContextPanel target={target} />}

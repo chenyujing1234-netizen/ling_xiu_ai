@@ -2,38 +2,10 @@ import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 
-// 灵修录音与手写笔记是很私密的东西，所以不放在 public/ 下公开可取，
+// 灵修录音是很私密的东西，所以不放在 public/ 下公开可取，
 // 而是存到 data/uploads/，经 /api/media 鉴权后才返回（见 app/api/media）。
+// 现在笔记一律以文字入库，这里只剩读取历史文件的路径。
 const UPLOAD_ROOT = () => process.env.UPLOAD_DIR || join(process.cwd(), 'data', 'uploads');
-
-const EXT: Record<string, string> = {
-  'audio/webm': 'webm',
-  'audio/ogg': 'ogg',
-  'audio/mp4': 'm4a',
-  'audio/mpeg': 'mp3',
-  'audio/wav': 'wav',
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-};
-
-export const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
-
-export function extFor(mime: string): string | null {
-  return EXT[mime.split(';')[0].trim()] ?? null;
-}
-
-/** 保存上传文件，返回可存库的相对路径（形如 3/ab12cd34.webm） */
-export async function saveUpload(userId: number, file: Blob, mime: string): Promise<string> {
-  const ext = extFor(mime);
-  if (!ext) throw new Error(`不支持的文件类型：${mime}`);
-  if (file.size > MAX_UPLOAD_BYTES) throw new Error('文件过大（上限 12MB）');
-
-  const dir = join(UPLOAD_ROOT(), String(userId));
-  await mkdir(dir, { recursive: true });
-  const name = `${Date.now().toString(36)}${randomBytes(4).toString('hex')}.${ext}`;
-  await writeFile(join(dir, name), Buffer.from(await file.arrayBuffer()));
-  return `${userId}/${name}`;
-}
 
 const MIME_BY_EXT: Record<string, string> = {
   webm: 'audio/webm',
@@ -43,9 +15,10 @@ const MIME_BY_EXT: Record<string, string> = {
   wav: 'audio/wav',
   png: 'image/png',
   jpg: 'image/jpeg',
+  webp: 'image/webp',
 };
 
-/** 读取媒体文件。relPath 必须是 saveUpload 返回的格式，这里再做一次路径校验防穿越 */
+/** 读取媒体文件。relPath 必须是 `用户id/随机名.后缀` 的格式，这里再做一次路径校验防穿越 */
 export async function readMedia(relPath: string) {
   if (!/^\d+\/[A-Za-z0-9]+\.[a-z0-9]{2,4}$/.test(relPath)) {
     throw new Error('非法路径');
@@ -65,6 +38,17 @@ export function ownerOf(relPath: string): number {
 const SCENE_DIR = 'scene';
 
 /**
+ * 供图接口回的是 1024×1024 无损 PNG，两百多万字节。这么大的图浏览器只能边下边画，
+ * 在手机上就是一行一行往下刷，所以落地前统一转成 webp（同样尺寸，约 1/8 大小）。
+ */
+const SCENE_QUALITY = 82;
+
+async function toWebp(data: Buffer): Promise<Buffer> {
+  const sharp = (await import('sharp')).default;
+  return await sharp(data).webp({ quality: SCENE_QUALITY }).toBuffer();
+}
+
+/**
  * 保存意境配图，返回可直接给 <img> 用的地址。
  *
  * 供图接口给的是 23 小时后过期的对象存储链接，存库当长期地址第二天就成裂图，
@@ -74,14 +58,42 @@ const SCENE_DIR = 'scene';
 export async function saveSceneImage(data: Buffer, ext: 'png' | 'jpg' = 'png'): Promise<string> {
   const dir = join(UPLOAD_ROOT(), SCENE_DIR);
   await mkdir(dir, { recursive: true });
-  const name = `${Date.now().toString(36)}${randomBytes(4).toString('hex')}.${ext}`;
-  await writeFile(join(dir, name), data);
+  const base = `${Date.now().toString(36)}${randomBytes(4).toString('hex')}`;
+
+  let name = `${base}.webp`;
+  let out: Buffer;
+  try {
+    out = await toWebp(data);
+  } catch {
+    // 转码失败不该让好不容易生成出来的图丢掉，退回原图
+    name = `${base}.${ext}`;
+    out = data;
+  }
+  await writeFile(join(dir, name), out);
   return `/api/scene/${name}`;
 }
 
 export async function readSceneImage(name: string) {
-  if (!/^[A-Za-z0-9]+\.(png|jpg)$/.test(name)) throw new Error('非法文件名');
+  if (!/^[A-Za-z0-9]+\.(png|jpg|webp)$/.test(name)) throw new Error('非法文件名');
+  const dir = join(UPLOAD_ROOT(), SCENE_DIR);
   const ext = name.split('.').pop() ?? 'png';
-  const data = await readFile(join(UPLOAD_ROOT(), SCENE_DIR, name));
-  return { data, mime: MIME_BY_EXT[ext] ?? 'image/png' };
+  if (ext === 'webp') {
+    return { data: await readFile(join(dir, name)), mime: 'image/webp' };
+  }
+
+  // 早期存的是未压缩原图，地址已经进了库不能改，那就第一次访问时在旁边压一份 webp，之后都走它
+  const slim = join(dir, `${name.slice(0, name.lastIndexOf('.'))}.webp`);
+  try {
+    return { data: await readFile(slim), mime: 'image/webp' };
+  } catch {
+    /* 还没压过，往下走 */
+  }
+  const raw = await readFile(join(dir, name));
+  try {
+    const data = await toWebp(raw);
+    await writeFile(slim, data);
+    return { data, mime: 'image/webp' };
+  } catch {
+    return { data: raw, mime: MIME_BY_EXT[ext] ?? 'image/png' };
+  }
 }

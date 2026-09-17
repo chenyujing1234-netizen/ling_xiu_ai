@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // better-sqlite3 是原生模块，必须留给 Node 运行时自行 require
-  serverExternalPackages: ['better-sqlite3'],
+  // better-sqlite3 与 sharp 都是原生模块，必须留给 Node 运行时自行 require
+  serverExternalPackages: ['better-sqlite3', 'sharp'],
   eslint: { ignoreDuringBuilds: true },
   async headers() {
     return [

@@ -187,7 +187,7 @@ export default function Reader({
             )}
           </div>
         </div>
-        <p className="mt-1 text-[11px] text-muted">长按任意一节 → 录音 / 手写 / 写下笔记 / 看上下文</p>
+        <p className="mt-1 text-[11px] text-muted">长按任意一节 → 口述 / 写下笔记 / 看上下文</p>
       </header>
 
       {loading && <p className="py-16 text-center text-sm text-muted">加载经文…</p>}
@@ -221,7 +221,6 @@ export default function Reader({
                     {notes.length > 0 && (
                       <span className="ml-1.5 inline-flex align-middle text-[11px] text-accent">
                         {notes.some((n) => n.kind === 'audio') && '🎙'}
-                        {notes.some((n) => n.kind === 'handwriting') && '✍'}
                         {notes.some((n) => n.kind === 'text') && '·'}
                       </span>
                     )}
@@ -236,10 +235,6 @@ export default function Reader({
                         {n.content && <p className="text-[13px] leading-relaxed text-brand-700">{n.content}</p>}
                         {n.kind === 'audio' && n.media_path && (
                           <audio src={`/api/media/${n.media_path}`} controls className="mt-1 h-8 w-full" />
-                        )}
-                        {n.kind === 'handwriting' && n.media_path && (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img src={`/api/media/${n.media_path}`} alt="手写笔记" className="mt-1 rounded-md border border-line" />
                         )}
                       </div>
                     ))}
