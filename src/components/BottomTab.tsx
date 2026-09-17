@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-// R-G1：五个底部 Tab。图标用内联 SVG，避免图标库拖慢首屏。
+// R-G1：四个底部 Tab。图标用内联 SVG，避免图标库拖慢首屏。
+// 原来的"发现"已并入"灵修"：它整理的都是围绕某一章的辅助材料，
+// 与灵修同章展开，分成两个 Tab 只会让人来回跳。
 const TABS = [
   { href: '/', label: '今日', icon: IconSun },
   { href: '/read', label: '读经', icon: IconBook },
   { href: '/devotion', label: '灵修', icon: IconFlame },
-  { href: '/explore', label: '发现', icon: IconGraph },
   { href: '/me', label: '我的', icon: IconUser },
 ];
 
@@ -78,17 +79,6 @@ function IconFlame({ className }: P) {
       <path d="M12 3s4.5 4.2 4.5 8.2A4.5 4.5 0 0112 15.7a4.5 4.5 0 01-4.5-4.5C7.5 7.2 12 3 12 3z" strokeLinejoin="round" />
       <path d="M9.2 15.5c0 2 1.3 3.5 2.8 3.5s2.8-1.5 2.8-3.5" strokeLinecap="round" />
       <path d="M12 21v-1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function IconGraph({ className }: P) {
-  return (
-    <svg className={`${base} ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <circle cx="12" cy="5" r="2.2" />
-      <circle cx="5" cy="18" r="2.2" />
-      <circle cx="19" cy="18" r="2.2" />
-      <path d="M10.6 6.8L6.4 15.9M13.4 6.8l4.2 9.1M7.2 18h9.6" strokeLinecap="round" />
     </svg>
   );
 }

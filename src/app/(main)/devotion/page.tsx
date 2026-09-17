@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import { getSession } from '@/lib/auth';
-import { getSettings, refLabel } from '@/lib/bible';
+import { allBooks, getSettings, refLabel } from '@/lib/bible';
 import { db } from '@/lib/db';
 import { STAGE_META, type Stage } from '@/lib/devotion';
+import DevotionHome from '@/components/DevotionHome';
+import ExploreView from '@/components/ExploreView';
 
 type Row = {
   id: number;
@@ -19,9 +21,15 @@ type Row = {
   input_count: number;
 };
 
-export default async function DevotionListPage() {
+export default async function DevotionListPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; book?: string; chapter?: string }>;
+}) {
+  const sp = await searchParams;
   const session = await getSession();
   const settings = getSettings(session!.uid);
+  const books = allBooks().map((b) => ({ id: b.id, name: b.name_cn, chapters: b.chapters }));
 
   const rows = db()
     .prepare(
@@ -37,7 +45,17 @@ export default async function DevotionListPage() {
   const finished = rows.filter((r) => r.stage === 'done');
 
   return (
-    <div className="px-4 py-5">
+    <DevotionHome
+      initialTab={sp.tab === 'explore' ? 'explore' : 'devotion'}
+      explore={
+        <ExploreView
+          books={books}
+          initialBook={Number(sp.book) || settings.cursor_book}
+          initialChapter={Number(sp.chapter) || settings.cursor_chapter}
+        />
+      }
+    >
+      <div className="px-4 py-5">
       <header className="mb-5">
         <h1 className="text-[22px] font-semibold">灵修</h1>
         <p className="mt-1 text-sm leading-relaxed text-muted">
@@ -105,6 +123,7 @@ export default async function DevotionListPage() {
           </ul>
         )}
       </section>
-    </div>
+      </div>
+    </DevotionHome>
   );
 }

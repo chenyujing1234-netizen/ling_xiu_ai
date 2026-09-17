@@ -65,8 +65,9 @@ export default function ExploreView({
 
   return (
     <div>
-      <header className="sticky top-0 z-30 border-b border-line bg-paper/95 px-4 py-3 backdrop-blur">
-        <h1 className="text-[17px] font-semibold">发现 · {label}</h1>
+      {/* top-11 让位给灵修页那层页签（h-11），否则两层吸顶会叠在一起 */}
+      <header className="sticky top-11 z-30 border-b border-line bg-paper/95 px-4 py-3 backdrop-blur">
+        <h1 className="text-[17px] font-semibold">经文资料 · {label}</h1>
         <div className="mt-2 flex gap-2">
           <select
             className="field flex-1 py-2 text-sm"
@@ -95,12 +96,14 @@ export default function ExploreView({
           </select>
         </div>
 
+        {/* 五个页签要在 390px 的窄屏上一排放下，不然"讲道视频"会被切掉半个，
+            没人知道右边还能滑 */}
         <div className="mt-2 flex gap-1 overflow-x-auto no-bar">
           {TABS.map((t) => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`shrink-0 rounded-lg px-3 py-1.5 text-xs transition ${
+              className={`shrink-0 rounded-lg px-2 py-1.5 text-xs transition ${
                 tab === t.key ? 'bg-brand-500 font-medium text-white' : 'border border-line text-muted'
               }`}
             >

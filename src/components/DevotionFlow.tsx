@@ -903,7 +903,7 @@ function DoneStage({ d }: { d: Detail }) {
 
       <div className="mt-5 flex gap-2">
         <Link
-          href={`/explore?book=${d.devotion.book_id}&chapter=${d.devotion.chapter}`}
+          href={`/devotion?tab=explore&book=${d.devotion.book_id}&chapter=${d.devotion.chapter}`}
           className="btn-ghost flex-1"
         >
           看这章的图谱

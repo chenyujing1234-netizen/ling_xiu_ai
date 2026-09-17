@@ -1,22 +1,17 @@
-import ExploreView from '@/components/ExploreView';
-import { getSession } from '@/lib/auth';
-import { allBooks, getSettings } from '@/lib/bible';
+import { redirect } from 'next/navigation';
 
-export default async function ExplorePage({
+/**
+ * "发现"已并入"灵修"。旧地址仍留着做跳转：
+ * 之前发出去的链接和存过的书签不该变成 404。
+ */
+export default async function ExploreRedirect({
   searchParams,
 }: {
   searchParams: Promise<{ book?: string; chapter?: string }>;
 }) {
   const sp = await searchParams;
-  const session = await getSession();
-  const settings = getSettings(session!.uid);
-  const books = allBooks().map((b) => ({ id: b.id, name: b.name_cn, chapters: b.chapters }));
-
-  return (
-    <ExploreView
-      books={books}
-      initialBook={Number(sp.book) || settings.cursor_book}
-      initialChapter={Number(sp.chapter) || settings.cursor_chapter}
-    />
-  );
+  const q = new URLSearchParams({ tab: 'explore' });
+  if (sp.book) q.set('book', sp.book);
+  if (sp.chapter) q.set('chapter', sp.chapter);
+  redirect(`/devotion?${q}`);
 }
