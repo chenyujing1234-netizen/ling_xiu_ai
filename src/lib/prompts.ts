@@ -298,6 +298,18 @@ ${input.passage}
 }
 
 /** 文生图：为经文生成意境配图的绘画提示词 */
+/**
+ * 选段配图：他自己挑的那几节，直接把原文交给画图模型。
+ * 不绕"要素梳理"那一趟 —— 省掉一次 AI 调用（快一半），画出来也更贴合他圈的这几节。
+ */
+export function imagePromptFromText(ref: string, text: string): string {
+  return `圣经场景插画，${ref}。
+经文：${text}
+照经文描述的场景作画，以其中最具画面感的一刻为主体。
+风格：古典油画质感，柔和暖色光线，庄重肃穆，写实但带诗意，广角构图，
+不出现任何文字、不出现现代物品、不描绘神的面容。`;
+}
+
 export function imagePromptFor(ref: string, thesis: string, places: string[]): string {
   return `圣经场景插画，${ref}。主题：${thesis}。
 场景元素：${places.join('、') || '古代近东旷野'}。

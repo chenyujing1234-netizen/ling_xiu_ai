@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/client';
 import NoteSheet, { type VerseTarget } from './NoteSheet';
+import SceneImageBar from './SceneImageBar';
 
 type Verse = { book_id: number; chapter: number; verse: number; cn: string; en: string };
 type Note = {
@@ -56,6 +57,31 @@ export default function Reader({
   const [pressing, setPressing] = useState<number | null>(null);
   const [picker, setPicker] = useState(false);
 
+  // 选段配图：圈中 1-N 节，为这一段生成画面。
+  // anchor 是圈的第一节，tail 是最后一节；只圈一节时 tail 为空
+  const [picking, setPicking] = useState(false);
+  const [anchor, setAnchor] = useState<number | null>(null);
+  const [tail, setTail] = useState<number | null>(null);
+
+  const range =
+    anchor === null
+      ? null
+      : { from: Math.min(anchor, tail ?? anchor), to: Math.max(anchor, tail ?? anchor) };
+
+  function exitPicking() {
+    setPicking(false);
+    setAnchor(null);
+    setTail(null);
+  }
+
+  function tapVerse(verse: number) {
+    // 第一下定起点，第二下定终点，选完再点就从那一节重新圈
+    if (anchor === null) return setAnchor(verse);
+    if (tail === null) return setTail(verse);
+    setAnchor(verse);
+    setTail(null);
+  }
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -88,6 +114,8 @@ export default function Reader({
 
   function pressStart(v: Verse, e: React.PointerEvent) {
     if (!data) return;
+    // 选段时一点就是圈一节，长按写笔记先让位，免得两种手势抢同一下按压
+    if (picking) return;
     if (e.pointerType !== 'touch') {
       // 鼠标/触控板：接管指针，这样手稍微滑出这一行也不会被 pointerleave 打断；
       // 同时阻止按住文本被当成拖拽或选择的起点
@@ -189,7 +217,34 @@ export default function Reader({
             )}
           </div>
         </div>
-        <p className="mt-1 text-[11px] text-muted">长按任意一节 → 口述 / 写下笔记 / 看上下文</p>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          {picking ? (
+            <>
+              <p className="text-[11px] leading-snug text-brand-700">
+                {anchor === null
+                  ? '点你想配图的第一节'
+                  : tail === null
+                    ? '再点最后一节；只要这一节就直接生成'
+                    : '想换一段，再点一节重新圈'}
+              </p>
+              <button onClick={exitPicking} className="shrink-0 text-[11px] text-muted underline">
+                退出选段
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-[11px] leading-snug text-muted">
+                长按任意一节 → 口述 / 写下笔记 / 看上下文
+              </p>
+              <button
+                onClick={() => setPicking(true)}
+                className="shrink-0 rounded-lg border border-line px-2 py-1 text-[11px] text-muted"
+              >
+                选段配图
+              </button>
+            </>
+          )}
+        </div>
       </header>
 
       {loading && <p className="py-16 text-center text-sm text-muted">加载经文…</p>}
@@ -202,6 +257,7 @@ export default function Reader({
             {data.verses.map((v) => {
               const notes = notesByVerse.get(v.verse) ?? [];
               const spoke = notes.some((n) => n.god_spoke);
+              const inRange = range !== null && v.verse >= range.from && v.verse <= range.to;
               return (
                 <div
                   key={v.verse}
@@ -210,10 +266,13 @@ export default function Reader({
                   onPointerUp={pressCancel}
                   onPointerCancel={pressCancel}
                   onPointerLeave={pressCancel}
+                  onClick={picking ? () => tapVerse(v.verse) : undefined}
                   onContextMenu={(e) => e.preventDefault()}
                   className={`no-select rounded-lg px-2 py-1.5 transition ${
                     pressing === v.verse ? 'bg-brand-100' : ''
-                  } ${spoke ? 'border-l-[3px] border-accent bg-accent/[0.04]' : ''}`}
+                  } ${spoke ? 'border-l-[3px] border-accent bg-accent/[0.04]' : ''} ${
+                    inRange ? 'bg-brand-100 ring-1 ring-brand-300' : ''
+                  } ${picking ? 'cursor-pointer' : ''}`}
                 >
                   <p className="scripture">
                     <sup className="mr-1 select-none align-super text-[11px] font-medium text-brand-300">
@@ -289,6 +348,9 @@ export default function Reader({
           <p className="mt-2 text-center text-xs text-muted">
             翻完页不算读过 —— 有观察、有提问、有回应才算
           </p>
+
+          {/* 选段配图的底栏浮在最下面，垫一段高度免得挡住上面的按钮 */}
+          {range && <div className="h-16" />}
         </div>
       )}
 
@@ -303,6 +365,19 @@ export default function Reader({
             setPicker(false);
           }}
           onClose={() => setPicker(false)}
+        />
+      )}
+
+      {range && data && (
+        <SceneImageBar
+          book={book}
+          chapter={chapter}
+          from={range.from}
+          to={range.to}
+          label={`${data.book.name_cn} ${chapter}:${range.from}${
+            range.to === range.from ? '' : `-${range.to}`
+          }`}
+          onClear={exitPicking}
         />
       )}
 

@@ -6,6 +6,7 @@ import {
   graphPrompt,
   mindmapPrompt,
   imagePromptFor,
+  imagePromptFromText,
 } from './prompts';
 import { getBook, getRange, passageText, refKey, refLabel, contextWindow, getVerse } from './bible';
 import { saveSceneImage } from './media';
@@ -270,16 +271,27 @@ export async function getSceneImage(
   if (hit?.url?.startsWith('/')) return hit;
   if (!MODELS.image()) return { url: null };
 
-  let thesis = r.label;
-  let places: string[] = [];
-  try {
-    const el = await getElements(bookId, chapter, from, to);
-    thesis = el.thesis || thesis;
-    places = (el.places ?? []).map((p) => p.name).slice(0, 3);
-  } catch {
-    /* 没有 elements 也能出图，只是提示词弱一些 */
+  // 他自己圈的一小段：原文本来就短，直接交给画图模型 —— 比先跑一遍要素梳理快一半，
+  // 也更贴合圈中的这几节。整章太长塞不进提示词，仍走要素梳理那条路。
+  const text = r.verses.map((v) => `${v.verse} ${v.cn}`).join(' ');
+  const isPick = r.verses.length <= 12 && text.length <= 700;
+
+  let prompt: string;
+  if (isPick) {
+    prompt = imagePromptFromText(r.label, text);
+  } else {
+    let thesis = r.label;
+    let places: string[] = [];
+    try {
+      const el = await getElements(bookId, chapter, from, to);
+      thesis = el.thesis || thesis;
+      places = (el.places ?? []).map((p) => p.name).slice(0, 3);
+    } catch {
+      /* 没有 elements 也能出图，只是提示词弱一些 */
+    }
+    prompt = imagePromptFor(r.label, thesis, places);
   }
-  const remote = await generateImage(imagePromptFor(r.label, thesis, places));
+  const remote = await generateImage(prompt);
   if (!remote) return { url: null };
 
   const payload = { url: await persistImage(remote) };
