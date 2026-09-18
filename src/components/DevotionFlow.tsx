@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/client';
+import { joinDictation } from '@/lib/dictate';
+import Dictate from './Dictate';
 import Waiting from './Waiting';
 
 // ---------- 类型 ----------
@@ -284,8 +286,10 @@ function ObserveStage({ d, act, busy }: StageProps) {
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
-      <div className="mt-1.5 flex items-center justify-between">
+      <div className="mt-1.5 flex items-center justify-between gap-2">
         <span className="text-xs text-muted">已写 {chars} 字（至少 30 字）</span>
+        <div className="flex items-center gap-2">
+        <Dictate onText={(t) => setText((prev) => joinDictation(prev, t))} disabled={busy} />
         <button
           className="btn-ghost px-3 py-1.5 text-xs"
           disabled={busy || text.trim().length < 2}
@@ -296,6 +300,7 @@ function ObserveStage({ d, act, busy }: StageProps) {
         >
           添加
         </button>
+        </div>
       </div>
 
       {/* R-D5 兜底追问 */}
@@ -386,7 +391,14 @@ function InquireStage({ d, act, busy }: StageProps) {
           添加
         </button>
       </div>
-      <p className="mt-1.5 text-xs text-muted">已提 {questions.length} 个问题（至少 2 个）</p>
+      <div className="mt-1.5 flex items-center justify-between gap-2">
+        <p className="text-xs text-muted">已提 {questions.length} 个问题（至少 2 个）</p>
+        <Dictate
+          onText={(t) => setText((prev) => joinDictation(prev, t, ' '))}
+          disabled={busy}
+          hint="说完自动填进上面的问题框"
+        />
+      </div>
 
       <NextButton gate={d.gate} busy={busy} onNext={() => act({ action: 'advance' })} label="下一步：默想作答" />
     </div>
@@ -487,13 +499,22 @@ function ReflectStage({ d, act, busy }: StageProps) {
                     value={answers[p.id] ?? ''}
                     onChange={(e) => setAnswers({ ...answers, [p.id]: e.target.value })}
                   />
-                  <button
-                    className="btn-ghost mt-2 px-3 py-1.5 text-xs"
-                    disabled={busy || (answers[p.id] ?? '').trim().length < 2}
-                    onClick={() => submitAnswer(p.id)}
-                  >
-                    提交这题
-                  </button>
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      className="btn-ghost px-3 py-1.5 text-xs"
+                      disabled={busy || (answers[p.id] ?? '').trim().length < 2}
+                      onClick={() => submitAnswer(p.id)}
+                    >
+                      提交这题
+                    </button>
+                    <Dictate
+                      onText={(t) =>
+                        setAnswers((prev) => ({ ...prev, [p.id]: joinDictation(prev[p.id] ?? '', t) }))
+                      }
+                      disabled={busy}
+                      hint="说完自动填进这一题的答题框"
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -713,7 +734,8 @@ function GuidedStage({ d, act, busy, reload }: StageProps) {
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
-          <div className="mt-2 flex gap-2">
+          <div className="mt-2 flex items-center gap-2">
+            <Dictate onText={(t) => setText((prev) => joinDictation(prev, t))} disabled={busy} />
             <button
               className="btn-ghost flex-1"
               disabled={busy || text.trim().length < 2}
@@ -767,16 +789,19 @@ function LifeStage({ d, act, busy }: StageProps) {
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
-      <button
-        className="btn-ghost mt-2 px-3 py-1.5 text-xs"
-        disabled={busy || text.trim().length < 5}
-        onClick={async () => {
-          const ok = await act({ action: 'input', kind: 'life_fact', content: text.trim() });
-          if (ok) setText('');
-        }}
-      >
-        添加
-      </button>
+      <div className="mt-2 flex items-center gap-2">
+        <button
+          className="btn-ghost px-3 py-1.5 text-xs"
+          disabled={busy || text.trim().length < 5}
+          onClick={async () => {
+            const ok = await act({ action: 'input', kind: 'life_fact', content: text.trim() });
+            if (ok) setText('');
+          }}
+        >
+          添加
+        </button>
+        <Dictate onText={(t) => setText((prev) => joinDictation(prev, t))} disabled={busy} />
+      </div>
 
       <NextButton gate={d.gate} busy={busy} onNext={() => act({ action: 'advance' })} label="下一步：祷告回应" />
     </div>
@@ -830,16 +855,19 @@ function PrayerStage({ d, act, busy }: StageProps) {
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
-      <button
-        className="btn-ghost mt-2 px-3 py-1.5 text-xs"
-        disabled={busy || text.trim().length < 5}
-        onClick={async () => {
-          const ok = await act({ action: 'input', kind: 'prayer', content: text.trim() });
-          if (ok) setText('');
-        }}
-      >
-        保存祷告
-      </button>
+      <div className="mt-2 flex items-center gap-2">
+        <button
+          className="btn-ghost px-3 py-1.5 text-xs"
+          disabled={busy || text.trim().length < 5}
+          onClick={async () => {
+            const ok = await act({ action: 'input', kind: 'prayer', content: text.trim() });
+            if (ok) setText('');
+          }}
+        >
+          保存祷告
+        </button>
+        <Dictate onText={(t) => setText((prev) => joinDictation(prev, t))} disabled={busy} hint="说出你的祷告，松开自动填进上面" />
+      </div>
 
       <NextButton gate={d.gate} busy={busy} onNext={() => act({ action: 'complete' })} label="完成这次灵修" />
     </div>

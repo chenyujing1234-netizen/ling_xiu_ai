@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/client';
+import { joinDictation, transcribe } from '@/lib/dictate';
 import Recorder from './Recorder';
 
 export type VerseTarget = {
@@ -161,17 +162,13 @@ export default function NoteSheet({
     setToast('');
     setTranscribing(true);
     try {
-      const form = new FormData();
-      form.append('file', blob, /mp4|m4a|aac/.test(blob.type) ? 'note.m4a' : 'note.webm');
-      const res = await api<{ text: string }>('/api/transcribe', { method: 'POST', body: form });
-      const said = res.text.trim();
+      const said = await transcribe(blob);
       if (!said) {
         setError('没听清，再说一次');
         return;
       }
       // 万一他先打了半句又改用口述，两段都留下，不能把打的字冲掉
-      const merged = text.trim() ? `${text.trim()}\n${said}` : said;
-      await saveNote(merged);
+      await saveNote(joinDictation(text, said));
       // 留一眼确认听对了没有；这条笔记随后就显示在经文下面
       done(`已记下：${said.length > 18 ? `${said.slice(0, 18)}…` : said}`, 1400);
     } catch (err) {
@@ -251,7 +248,11 @@ export default function NoteSheet({
 
           {tab === 'audio' && (
             <div className="space-y-1">
-              <Recorder busy={transcribing} onDone={speakToText} />
+              <Recorder
+                busy={transcribing}
+                onDone={speakToText}
+                note={editing ? '松开即接到这条笔记后面' : '松开即转成文字直接记下，想改就点开这条笔记'}
+              />
               {/* 口述说完就直接入库，不再经过"写下"，这个勾选得在开口前就够得着 */}
               <div className="px-1 pb-2">{godSpokeBox}</div>
             </div>
