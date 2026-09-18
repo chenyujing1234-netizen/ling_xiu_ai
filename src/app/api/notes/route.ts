@@ -74,6 +74,38 @@ export async function POST(req: Request) {
   });
 }
 
+const EditNote = z.object({
+  id: z.number().int().positive(),
+  content: z.string().trim().max(4000),
+  godSpoke: z.boolean().optional(),
+});
+
+/**
+ * 改一条已记下的笔记。
+ *
+ * 口述转出的文字是直接入库的（说完就记下才是口述的意义），
+ * 识别难免有听错的字，所以事后必须改得动。
+ */
+export async function PATCH(req: Request) {
+  return handler(async () => {
+    const session = await requireSession();
+    const data = await body(req, EditNote);
+    if (!data.content && !data.godSpoke) bad('笔记内容不能为空');
+
+    // 先单独确认归属：MySQL 的 UPDATE 只报"真被改动的行数"，
+    // 内容一字未改时是 0，拿它判断存在与否会误报 404
+    const own = await db()
+      .prepare(`SELECT id FROM verse_notes WHERE id = ? AND user_id = ?`)
+      .get(data.id, session.uid);
+    if (!own) throw new HttpError(404, '笔记不存在');
+
+    await db()
+      .prepare(`UPDATE verse_notes SET content = ?, god_spoke = ? WHERE id = ? AND user_id = ?`)
+      .run(data.content, data.godSpoke ? 1 : 0, data.id, session.uid);
+    return { ok: true };
+  });
+}
+
 export async function DELETE(req: Request) {
   return handler(async () => {
     const session = await requireSession();

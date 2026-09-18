@@ -37,26 +37,44 @@ function lastUsedInput(): Tab {
   return v && INPUT_TABS.includes(v) ? v : 'text';
 }
 
+/** 改一条已记下的笔记时传进来 */
+export type NoteEdit = { id: number; content: string; godSpoke: boolean };
+
 export default function NoteSheet({
   target,
   devotionId,
+  editing,
   onClose,
   onSaved,
 }: {
   target: VerseTarget;
   devotionId?: number | null;
+  editing?: NoteEdit | null;
   onClose: () => void;
   onSaved?: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>(lastUsedInput);
-  const [text, setText] = useState('');
-  const [godSpoke, setGodSpoke] = useState(false);
+  // 改旧笔记就直接进"写下"，这时候要的是改字，不是换输入方式
+  const [tab, setTab] = useState<Tab>(editing ? 'text' : lastUsedInput);
+  const [text, setText] = useState(editing?.content ?? '');
+  const [godSpoke, setGodSpoke] = useState(editing?.godSpoke ?? false);
   const [busy, setBusy] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
 
   const ref = `${target.bookName} ${target.chapter}:${target.verse}`;
+
+  const godSpokeBox = (
+    <label className="flex items-center gap-2.5 py-1 text-sm">
+      <input
+        type="checkbox"
+        className="h-[18px] w-[18px] accent-brand-500"
+        checked={godSpoke}
+        onChange={(e) => setGodSpoke(e.target.checked)}
+      />
+      <span>这一节神对我说话</span>
+    </label>
+  );
 
   function pickTab(t: Tab) {
     setTab(t);
@@ -77,10 +95,43 @@ export default function NoteSheet({
     };
   }, []);
 
-  function done(message: string) {
+  function done(message: string, hold = 700) {
     setToast(message);
     onSaved?.();
-    setTimeout(onClose, 700);
+    setTimeout(onClose, hold);
+  }
+
+  async function saveNote(content: string) {
+    if (editing) {
+      await api('/api/notes', {
+        method: 'PATCH',
+        json: { id: editing.id, content, godSpoke },
+      });
+      return;
+    }
+    await api('/api/notes', {
+      json: {
+        bookId: target.bookId,
+        chapter: target.chapter,
+        verse: target.verse,
+        content,
+        godSpoke,
+        devotionId: devotionId ?? null,
+      },
+    });
+  }
+
+  async function removeNote() {
+    if (!editing) return;
+    setError('');
+    setBusy(true);
+    try {
+      await api(`/api/notes?id=${editing.id}`, { method: 'DELETE' });
+      done('已删掉');
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
   }
 
   async function saveText() {
@@ -91,17 +142,8 @@ export default function NoteSheet({
     setError('');
     setBusy(true);
     try {
-      await api('/api/notes', {
-        json: {
-          bookId: target.bookId,
-          chapter: target.chapter,
-          verse: target.verse,
-          content: text.trim(),
-          godSpoke,
-          devotionId: devotionId ?? null,
-        },
-      });
-      done('已记下');
+      await saveNote(text.trim());
+      done(editing ? '已改好' : '已记下');
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -111,8 +153,8 @@ export default function NoteSheet({
 
   /**
    * 口述转文字。音频只是中转，不保存成文件；
-   * 转出来的字先落到"写下"里由本人过一眼 —— 识别难免有错别字，
-   * 直接入库不如让他顺手改一句。
+   * 转出来的字**直接入库**，不再落到"写下"里等他确认 ——
+   * 说完就记下才是口述的意义，要改可以回头点开这条笔记。
    */
   async function speakToText(blob: Blob) {
     setError('');
@@ -122,11 +164,16 @@ export default function NoteSheet({
       const form = new FormData();
       form.append('file', blob, /mp4|m4a|aac/.test(blob.type) ? 'note.m4a' : 'note.webm');
       const res = await api<{ text: string }>('/api/transcribe', { method: 'POST', body: form });
-      setText((prev) => (prev.trim() ? `${prev.trim()}\n${res.text}` : res.text));
-      // 用 setTab 而非 pickTab：这是转写后的自动跳转，
-      // 不该把"下次默认用哪种输入"从录音改成打字
-      setTab('text');
-      setToast('已转成文字，看看有没有听错，改好再保存');
+      const said = res.text.trim();
+      if (!said) {
+        setError('没听清，再说一次');
+        return;
+      }
+      // 万一他先打了半句又改用口述，两段都留下，不能把打的字冲掉
+      const merged = text.trim() ? `${text.trim()}\n${said}` : said;
+      await saveNote(merged);
+      // 留一眼确认听对了没有；这条笔记随后就显示在经文下面
+      done(`已记下：${said.length > 18 ? `${said.slice(0, 18)}…` : said}`, 1400);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -186,23 +233,28 @@ export default function NoteSheet({
                 onChange={(e) => setText(e.target.value)}
                 autoFocus
               />
-              <label className="flex items-center gap-2.5 py-1 text-sm">
-                <input
-                  type="checkbox"
-                  className="h-[18px] w-[18px] accent-brand-500"
-                  checked={godSpoke}
-                  onChange={(e) => setGodSpoke(e.target.checked)}
-                />
-                <span>这一节神对我说话</span>
-              </label>
+              {godSpokeBox}
               <button className="btn-primary w-full py-3" onClick={saveText} disabled={busy}>
-                {busy ? '保存中…' : '保存笔记'}
+                {busy ? '保存中…' : editing ? '改好了' : '保存笔记'}
               </button>
+              {editing && (
+                <button
+                  className="w-full py-2 text-sm text-accent active:opacity-60"
+                  onClick={removeNote}
+                  disabled={busy}
+                >
+                  删掉这条笔记
+                </button>
+              )}
             </div>
           )}
 
           {tab === 'audio' && (
-            <Recorder busy={transcribing} onDone={speakToText} />
+            <div className="space-y-1">
+              <Recorder busy={transcribing} onDone={speakToText} />
+              {/* 口述说完就直接入库，不再经过"写下"，这个勾选得在开口前就够得着 */}
+              <div className="px-1 pb-2">{godSpokeBox}</div>
+            </div>
           )}
 
           {tab === 'context' && <ContextPanel target={target} />}

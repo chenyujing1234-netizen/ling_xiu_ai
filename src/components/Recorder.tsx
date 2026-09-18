@@ -139,7 +139,7 @@ export default function Recorder({
       ? '松开就结束'
       : state === 'starting'
         ? '正在打开话筒…'
-        : '按住说话，松开自动转成文字';
+        : '按住说话，松开就转成文字记下';
 
   return (
     <div className="flex flex-col items-center gap-4 py-3">
@@ -167,6 +167,8 @@ export default function Recorder({
 
       <p className="text-sm text-muted">{hint}</p>
       <p className="text-center text-xs text-muted">
+        松开即转成文字并直接记下，想改就点开这条笔记
+        <br />
         只留下识别出的文字，不保存录音文件 · 单次最长 2 分钟
       </p>
     </div>

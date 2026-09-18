@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/client';
-import NoteSheet, { type VerseTarget } from './NoteSheet';
+import NoteSheet, { type NoteEdit, type VerseTarget } from './NoteSheet';
 import SceneImageBar from './SceneImageBar';
 
 type Verse = { book_id: number; chapter: number; verse: number; cn: string; en: string };
@@ -54,6 +54,7 @@ export default function Reader({
   const [error, setError] = useState('');
   const [bilingual, setBilingual] = useState(false);
   const [target, setTarget] = useState<VerseTarget | null>(null);
+  const [editing, setEditing] = useState<NoteEdit | null>(null);
   const [pressing, setPressing] = useState<number | null>(null);
   const [picker, setPicker] = useState(false);
 
@@ -126,6 +127,7 @@ export default function Reader({
     setPressing(v.verse);
     timer.current = setTimeout(() => {
       navigator.vibrate?.(12); // 有触感反馈，用户才知道"长按成功了"
+      setEditing(null);
       setTarget({
         bookId: data.book.id,
         bookName: data.book.name_cn,
@@ -293,7 +295,29 @@ export default function Reader({
                     .filter((n) => n.content || n.media_path)
                     .map((n) => (
                       <div key={n.id} className="mt-1.5 ml-4 rounded-lg bg-brand-50/70 px-3 py-2">
-                        {n.content && <p className="text-[13px] leading-relaxed text-brand-700">{n.content}</p>}
+                        {n.content && (
+                          // 点一下就能改：口述转出的字是直接入库的，听错的地方得改得动。
+                          // 拦住指针事件，免得这一下被上层当成"长按这一节"
+                          <p
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (picking) return;
+                              setTarget({
+                                bookId: data.book.id,
+                                bookName: data.book.name_cn,
+                                chapter: data.chapter,
+                                verse: v.verse,
+                                cn: v.cn,
+                                en: v.en,
+                              });
+                              setEditing({ id: n.id, content: n.content, godSpoke: !!n.god_spoke });
+                            }}
+                            className="cursor-pointer text-[13px] leading-relaxed text-brand-700"
+                          >
+                            {n.content}
+                          </p>
+                        )}
                         {n.kind === 'audio' && n.media_path && (
                           <audio src={`/api/media/${n.media_path}`} controls className="mt-1 h-8 w-full" />
                         )}
@@ -385,7 +409,11 @@ export default function Reader({
         <NoteSheet
           target={target}
           devotionId={devotionId}
-          onClose={() => setTarget(null)}
+          editing={editing}
+          onClose={() => {
+            setTarget(null);
+            setEditing(null);
+          }}
           onSaved={load}
         />
       )}
