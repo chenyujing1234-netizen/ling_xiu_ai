@@ -38,11 +38,15 @@ console.log(`  授权码      ${PASS ? `已填，${PASS.length} 位` : '（空�
 console.log(`  收件人      ${TO}`);
 
 if (!USER || !PASS) {
-  console.log('\n× 没配发件账号，申请通知发不出去（申请本身不受影响）。');
-  console.log('  在 .env.local 里填这两项：');
-  console.log('    SENDER_EMAIL=你的QQ邮箱@qq.com');
-  console.log('    SMTP_PASSWORD=邮箱授权码（不是登录密码）');
-  console.log('  授权码在 QQ 邮箱 → 设置 → 账号与安全 → 安全设置 → 开启 IMAP/SMTP 服务 里生成。');
+  const missing = [!USER && 'SENDER_EMAIL', !PASS && 'SMTP_PASSWORD'].filter(Boolean);
+  console.log(`\n× 还差 ${missing.join(' 和 ')}，申请通知发不出去（申请本身不受影响）。`);
+  console.log('  在 .env.local 里填上：');
+  if (!USER) console.log('    SENDER_EMAIL=你的QQ邮箱@qq.com');
+  if (!PASS) console.log('    SMTP_PASSWORD=邮箱授权码（16 位，不是邮箱登录密码）');
+  if (!PASS) {
+    console.log('  授权码在 QQ 邮箱 → 设置 → 账号与安全 → 安全设置 →');
+    console.log('  开启「IMAP/SMTP 服务」→ 生成授权码。');
+  }
   process.exit(1);
 }
 
