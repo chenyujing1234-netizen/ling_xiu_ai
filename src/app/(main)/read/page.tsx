@@ -1,25 +1,17 @@
-import Reader from '@/components/Reader';
-import { getSession } from '@/lib/auth';
-import { getSettings } from '@/lib/bible';
+import { redirect } from 'next/navigation';
 
-export default async function ReadPage({
+/**
+ * 读经已经并进灵修页的第一个页签，这里只负责把老链接和书签接过去。
+ */
+export default async function ReadRedirect({
   searchParams,
 }: {
   searchParams: Promise<{ book?: string; chapter?: string; devotion?: string }>;
 }) {
   const sp = await searchParams;
-  const session = await getSession();
-  const settings = await getSettings(session!.uid);
-
-  // 没带参数就从他自己的读经游标开始
-  const book = Number(sp.book) || settings.cursor_book;
-  const chapter = Number(sp.chapter) || settings.cursor_chapter;
-
-  return (
-    <Reader
-      initialBook={book}
-      initialChapter={chapter}
-      devotionId={sp.devotion ? Number(sp.devotion) : null}
-    />
-  );
+  const q = new URLSearchParams({ tab: 'read' });
+  if (sp.book) q.set('book', sp.book);
+  if (sp.chapter) q.set('chapter', sp.chapter);
+  if (sp.devotion) q.set('devotion', sp.devotion);
+  redirect(`/devotion?${q}`);
 }

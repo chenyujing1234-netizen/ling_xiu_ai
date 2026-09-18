@@ -156,8 +156,8 @@ export default function Reader({
 
   return (
     <div>
-      {/* 顶栏 */}
-      <header className="sticky top-0 z-30 border-b border-line bg-paper/95 px-4 py-3 backdrop-blur">
+      {/* 顶栏。top-11 是给灵修页那排页签让位，z 也要低于它 */}
+      <header className="sticky top-11 z-30 border-b border-line bg-paper/95 px-4 py-3 backdrop-blur">
         <div className="flex items-center justify-between gap-2">
           <button onClick={() => setPicker(true)} className="flex items-center gap-1.5 text-left">
             <span className="text-[17px] font-semibold">
@@ -178,11 +178,13 @@ export default function Reader({
               中英
             </button>
             {data && (
+              // 读经现在就在"灵修"这个 Tab 里，按钮再叫"灵修"会被当成切页签，
+              // 说清是"就这一章走七步流程"
               <Link
                 href={`/devotion/start?book=${book}&chapter=${chapter}`}
                 className="rounded-lg bg-accent px-2.5 py-1.5 text-xs font-medium text-white"
               >
-                灵修
+                开始灵修
               </Link>
             )}
           </div>

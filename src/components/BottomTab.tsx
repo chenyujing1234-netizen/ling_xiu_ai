@@ -3,12 +3,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-// R-G1：四个底部 Tab。图标用内联 SVG，避免图标库拖慢首屏。
-// 原来的"发现"已并入"灵修"：它整理的都是围绕某一章的辅助材料，
-// 与灵修同章展开，分成两个 Tab 只会让人来回跳。
+// R-G1：三个底部 Tab。图标用内联 SVG，避免图标库拖慢首屏。
+// 原来的"发现"和"读经"都并进了"灵修"：这个产品没有脱离灵修的读经，
+// 读经文、就着它灵修、查它的资料，本来就是同一件事的三个面，
+// 摊成几个 Tab 只会让人来回跳。
 const TABS = [
   { href: '/', label: '今日', icon: IconSun },
-  { href: '/read', label: '读经', icon: IconBook },
   { href: '/devotion', label: '灵修', icon: IconFlame },
   { href: '/me', label: '我的', icon: IconUser },
 ];
@@ -60,15 +60,6 @@ function IconSun({ className }: P) {
     <svg className={`${base} ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
       <circle cx="12" cy="12" r="4" />
       <path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function IconBook({ className }: P) {
-  return (
-    <svg className={`${base} ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <path d="M4 5.5A1.5 1.5 0 015.5 4H10a2 2 0 012 2v13a1.6 1.6 0 00-1.6-1.6H4z" strokeLinejoin="round" />
-      <path d="M20 5.5A1.5 1.5 0 0018.5 4H14a2 2 0 00-2 2v13a1.6 1.6 0 011.6-1.6H20z" strokeLinejoin="round" />
     </svg>
   );
 }

@@ -113,7 +113,7 @@ export default function DevotionFlow({ id }: { id: number }) {
         <div className="flex items-baseline justify-between">
           <h1 className="text-[17px] font-semibold">{d.passage.label}</h1>
           <Link
-            href={`/read?book=${d.devotion.book_id}&chapter=${d.devotion.chapter}&devotion=${id}`}
+            href={`/devotion?tab=read&book=${d.devotion.book_id}&chapter=${d.devotion.chapter}&devotion=${id}`}
             className="text-xs text-brand-500"
           >
             看经文 →
@@ -908,7 +908,7 @@ function DoneStage({ d }: { d: Detail }) {
         >
           看这章的图谱
         </Link>
-        <Link href="/read" className="btn-primary flex-1">
+        <Link href="/devotion?tab=read" className="btn-primary flex-1">
           继续读经
         </Link>
       </div>

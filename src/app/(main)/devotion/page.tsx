@@ -3,8 +3,9 @@ import { getSession } from '@/lib/auth';
 import { allBooks, getSettings, refLabel } from '@/lib/bible';
 import { db } from '@/lib/db';
 import { STAGE_META, type Stage } from '@/lib/devotion';
-import DevotionHome from '@/components/DevotionHome';
+import DevotionHome, { type HomeTab } from '@/components/DevotionHome';
 import ExploreView from '@/components/ExploreView';
+import Reader from '@/components/Reader';
 
 type Row = {
   id: number;
@@ -24,7 +25,7 @@ type Row = {
 export default async function DevotionListPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; book?: string; chapter?: string }>;
+  searchParams: Promise<{ tab?: string; book?: string; chapter?: string; devotion?: string }>;
 }) {
   const sp = await searchParams;
   const session = await getSession();
@@ -47,21 +48,29 @@ export default async function DevotionListPage({
   const ongoing = rows.filter((r) => r.stage !== 'done');
   const finished = rows.filter((r) => r.stage === 'done');
 
+  // 没带 tab 就停在读经；带了就认它，认不出的当读经
+  const tab: HomeTab = sp.tab === 'explore' || sp.tab === 'devotion' ? sp.tab : 'read';
+  // 没指定章节就接着他自己的读经进度
+  const book = Number(sp.book) || settings.cursor_book;
+  const chapter = Number(sp.chapter) || settings.cursor_chapter;
+
   return (
     <DevotionHome
-      initialTab={sp.tab === 'explore' ? 'explore' : 'devotion'}
-      explore={
-        <ExploreView
-          books={books}
-          initialBook={Number(sp.book) || settings.cursor_book}
-          initialChapter={Number(sp.chapter) || settings.cursor_chapter}
+      initialTab={tab}
+      read={
+        <Reader
+          initialBook={book}
+          initialChapter={chapter}
+          devotionId={sp.devotion ? Number(sp.devotion) : null}
         />
       }
+      explore={<ExploreView books={books} initialBook={book} initialChapter={chapter} />}
     >
       <div className="px-4 py-5">
+      {/* 页签上已经写着"我的灵修"，标题只留给读屏软件，不再占一行 */}
       <header className="mb-5">
-        <h1 className="text-[22px] font-semibold">灵修</h1>
-        <p className="mt-1 text-sm leading-relaxed text-muted">
+        <h1 className="sr-only">我的灵修</h1>
+        <p className="text-sm leading-relaxed text-muted">
           七步走完才算一次完整的灵修：观察 → 提问 → 默想 → 引导 → 实事 → 祷告。
         </p>
       </header>

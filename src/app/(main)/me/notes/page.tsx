@@ -66,7 +66,7 @@ export default async function MyNotesPage({
             <li key={n.id} className="card px-4 py-3.5">
               <div className="mb-1.5 flex items-center justify-between">
                 <Link
-                  href={`/read?book=${n.book_id}&chapter=${n.chapter}`}
+                  href={`/devotion?tab=read&book=${n.book_id}&chapter=${n.chapter}`}
                   className="text-xs font-medium text-brand-500"
                 >
                   {n.book_name} {n.chapter}:{n.verse}

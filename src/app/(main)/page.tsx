@@ -97,7 +97,7 @@ export default async function TodayPage() {
                 </p>
               </div>
               <Link
-                href={`/read?book=${s.bookId}&chapter=${s.chapter}`}
+                href={`/devotion?tab=read&book=${s.bookId}&chapter=${s.chapter}`}
                 className="btn-ghost shrink-0 px-3 py-1.5 text-xs"
               >
                 {s.opened ? '继续' : '读'}

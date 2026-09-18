@@ -219,10 +219,16 @@ ok('首页正常渲染', home.status === 200 && home.text.includes('今日读经
 ok('首页显示笔记数', home.text.includes('读经笔记'));
 const mePage = await timed('我的页面', () => api('/me'));
 ok('"我的"页面正常', mePage.status === 200 && mePage.text.includes('自检账号'), `HTTP ${mePage.status}`);
-const readPage = await timed('读经页', () => api('/read?book=1&chapter=1'));
-ok('读经页正常', readPage.status === 200);
-const devPage = await timed('灵修列表页', () => api('/devotion'));
-ok('灵修列表页正常', devPage.status === 200 && devPage.text.includes('灵修'));
+// 读经已并进灵修页的第一个页签，老地址只剩重定向
+const readPage = await timed('读经老地址', () => api('/read?book=1&chapter=1'));
+ok('/read 跳到灵修页的读经页签',
+  readPage.status === 307 && /\/devotion\?.*tab=read/.test(readPage.headers?.get('location') ?? ''),
+  `HTTP ${readPage.status} → ${readPage.headers?.get('location') ?? '无 Location'}`);
+const devPage = await timed('灵修页', () => api('/devotion'));
+ok('灵修页正常，且默认就是读经', devPage.status === 200 && devPage.text.includes('长按任意一节'),
+  `HTTP ${devPage.status}`);
+ok('灵修页三个页签都在',
+  ['读经', '我的灵修', '经文资料'].every((t) => devPage.text.includes(t)));
 const notesPage = await api('/me/notes');
 ok('笔记页显示刚写的笔记', notesPage.text.includes('神先说话'));
 
