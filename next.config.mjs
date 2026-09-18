@@ -4,7 +4,7 @@ const nextConfig = {
   // ws 打进 bundle 后会被换成浏览器桩子，连不上也不报错，只能干等到超时。
   // better-sqlite3 现在只有迁移脚本在用，应用代码已经换成 mysql2，
   // 留在这里是防它哪天又被引进来时炸在构建期
-  serverExternalPackages: ['better-sqlite3', 'sharp', 'ws'],
+  serverExternalPackages: ['better-sqlite3', 'sharp', 'ws', 'nodemailer'],
   eslint: { ignoreDuringBuilds: true },
   async headers() {
     return [
