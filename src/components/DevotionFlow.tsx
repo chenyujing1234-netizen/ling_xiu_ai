@@ -179,6 +179,20 @@ export default function DevotionFlow({ id }: { id: number }) {
     [id, load],
   );
 
+  const onViewSavedFeedback = useCallback(
+    (key: FeedbackStageKey) => {
+      if (!d) return;
+      const text = d.stageFeedbacks?.[key];
+      if (!text?.trim()) return;
+      setStageFeedback({
+        from: FEEDBACK_STAGE_TITLE[key] ?? key,
+        text: text.trim(),
+        ragSources: d.stageFeedbackRagSources?.[key],
+      });
+    },
+    [d],
+  );
+
   async function openChapterPicker() {
     if (busy || !d) return;
     setPickerOpen(true);
@@ -210,19 +224,6 @@ export default function DevotionFlow({ id }: { id: number }) {
 
   const stage = d.devotion.stage;
   const stageIndex = STEPS.findIndex((s) => s.key === stage);
-
-  const onViewSavedFeedback = useCallback(
-    (key: FeedbackStageKey) => {
-      const text = d.stageFeedbacks?.[key];
-      if (!text?.trim()) return;
-      setStageFeedback({
-        from: FEEDBACK_STAGE_TITLE[key] ?? key,
-        text: text.trim(),
-        ragSources: d.stageFeedbackRagSources?.[key],
-      });
-    },
-    [d.stageFeedbacks, d.stageFeedbackRagSources],
-  );
 
   return (
     <div>
