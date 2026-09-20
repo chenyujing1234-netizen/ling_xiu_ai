@@ -127,3 +127,39 @@ export function fallbackGuide(ref: string, questions: string): string {
 
 （当前 AI 服务暂时不可用，这是离线引导。恢复后可重新生成针对你的回应。）`;
 }
+
+/** 阶段切换时的短评（AI 不可用） */
+export function fallbackStageFeedback(
+  stage: 'observe' | 'inquire' | 'reflect' | 'guided' | 'life',
+  userContent: string,
+): string {
+  const clip = userContent.trim().slice(0, 36);
+  const quote = clip ? `你写到「${clip}${userContent.length > 36 ? '…' : ''}」` : '你已经留下了文字';
+
+  switch (stage) {
+    case 'observe':
+      return `${quote}，说明你在对着经文看，而不是只翻页。下一步提问时，试着问一句你自己也答不上来的「为什么」。（离线简评）`;
+    case 'inquire':
+      return `${quote}。真问题往往带着一点不安或矛盾——带着它们进入默想，比找标准答案更重要。（离线简评）`;
+    case 'reflect':
+      return `${quote}，是你自己的话，这很好。若还觉得浅，回经文找一句最刺你的，再答一次。（离线简评）`;
+    case 'guided':
+      return clip
+        ? `${quote}，同行者会顺着你的话往下走。进入生命实事时，找一件这周真实发生的事。（离线简评）`
+        : '你已经读完了同行者的回应。进入生命实事时，写一件这周真实发生的事，比写感想更有力。（离线简评）';
+    case 'life':
+      return `${quote}。实事写具体了，祷告才有内容。下一步试着对神说实话，不用漂亮。（离线简评）`;
+  }
+}
+
+/** 笔记同行者点评（AI 不可用） */
+export function fallbackNoteReview(ref: string, noteContent: string): string {
+  const clip = noteContent.trim().slice(0, 40);
+  const quote = clip ? `你在「${ref}」旁写到「${clip}${noteContent.length > 40 ? '…' : ''}」` : `你在「${ref}」旁留下了笔记`;
+  const hasQuestion = /[?？]|为什么|为何|怎么|如何|是不是|能不能|吗|呢/.test(noteContent);
+  const base = `${quote}，说明你在让经文碰到自己的心里。不妨再读一遍这节字句，找一句最贴你处境的，对着它诚实祷告。（离线简评）`;
+  if (!hasQuestion) return base;
+  return `${base}
+
+关于你的疑问：我这边暂时连不上完整的同行者服务，没法细答。你可以把疑问留在笔记里，改天再点开「同行者点评」；或带着这个问题再读前后文，看经文本身是否在回应你。（离线提示）`;
+}

@@ -1,3 +1,5 @@
+@import './themes.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -46,7 +48,7 @@ body {
   }
   .btn {
     @apply inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm
-           font-medium transition active:scale-[0.97] disabled:opacity-40 disabled:active:scale-100;
+           font-semibold transition active:scale-[0.97] disabled:opacity-40 disabled:active:scale-100;
   }
   .btn-primary {
     @apply btn bg-brand-500 text-white active:bg-brand-600;
@@ -63,10 +65,22 @@ body {
   }
   .chip {
     @apply inline-flex items-center gap-1 rounded-full border border-line bg-brand-50
-           px-2.5 py-1 text-xs text-brand-700;
+           px-2.5 py-1 text-xs font-semibold text-brand-700;
   }
   .label {
-    @apply text-xs font-medium tracking-wide text-muted;
+    @apply text-xs font-semibold tracking-wide text-brand-700;
+  }
+  .section-title {
+    @apply mb-2 flex items-center gap-2 text-[15px] font-bold leading-snug text-ink;
+  }
+  .section-title-icon {
+    @apply flex h-7 w-7 items-center justify-center rounded-lg bg-brand-100 text-brand-700;
+  }
+  .page-heading {
+    @apply text-[24px] font-bold leading-snug tracking-tight text-ink;
+  }
+  .lead-strong {
+    @apply font-semibold text-ink;
   }
   /* 底部弹出面板 */
   .sheet {

@@ -1,0 +1,70 @@
+/* 语义色（RGB 通道，供 Tailwind 透明度修饰符使用） */
+
+:root,
+[data-theme='classic'] {
+  --tw-paper: 251 248 241;
+  --tw-card: 255 255 255;
+  --tw-ink: 44 38 32;
+  --tw-muted: 138 128 120;
+  --tw-line: 232 224 212;
+  --tw-brand-50: 245 242 234;
+  --tw-brand-100: 230 223 205;
+  --tw-brand-300: 194 171 127;
+  --tw-brand-500: 138 109 59;
+  --tw-brand-600: 117 92 49;
+  --tw-brand-700: 92 72 38;
+  --tw-accent: 156 91 63;
+  --tw-shadow-sheet: 0 -8px 32px rgba(44, 38, 32, 0.16);
+  --tw-shadow-soft: 0 1px 3px rgba(44, 38, 32, 0.06), 0 8px 24px rgba(44, 38, 32, 0.04);
+}
+
+[data-theme='sea'] {
+  --tw-paper: 244 247 250;
+  --tw-card: 255 255 255;
+  --tw-ink: 30 42 51;
+  --tw-muted: 107 125 138;
+  --tw-line: 216 226 234;
+  --tw-brand-50: 238 244 248;
+  --tw-brand-100: 212 228 239;
+  --tw-brand-300: 123 163 192;
+  --tw-brand-500: 61 107 140;
+  --tw-brand-600: 50 90 117;
+  --tw-brand-700: 38 70 89;
+  --tw-accent: 196 92 74;
+  --tw-shadow-sheet: 0 -8px 32px rgba(30, 42, 51, 0.14);
+  --tw-shadow-soft: 0 1px 3px rgba(30, 42, 51, 0.06), 0 8px 24px rgba(30, 42, 51, 0.05);
+}
+
+[data-theme='olive'] {
+  --tw-paper: 246 247 242;
+  --tw-card: 255 255 255;
+  --tw-ink: 42 47 36;
+  --tw-muted: 122 130 112;
+  --tw-line: 223 227 212;
+  --tw-brand-50: 238 241 232;
+  --tw-brand-100: 221 228 208;
+  --tw-brand-300: 148 166 122;
+  --tw-brand-500: 90 107 74;
+  --tw-brand-600: 74 88 61;
+  --tw-brand-700: 58 69 48;
+  --tw-accent: 139 105 20;
+  --tw-shadow-sheet: 0 -8px 32px rgba(42, 47, 36, 0.14);
+  --tw-shadow-soft: 0 1px 3px rgba(42, 47, 36, 0.06), 0 8px 24px rgba(42, 47, 36, 0.04);
+}
+
+[data-theme='night'] {
+  --tw-paper: 28 27 25;
+  --tw-card: 38 36 34;
+  --tw-ink: 236 230 220;
+  --tw-muted: 154 146 136;
+  --tw-line: 58 56 52;
+  --tw-brand-50: 46 44 40;
+  --tw-brand-100: 61 58 52;
+  --tw-brand-300: 160 136 88;
+  --tw-brand-500: 201 168 108;
+  --tw-brand-600: 212 182 122;
+  --tw-brand-700: 226 201 146;
+  --tw-accent: 212 132 106;
+  --tw-shadow-sheet: 0 -8px 32px rgba(0, 0, 0, 0.45);
+  --tw-shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.25);
+}

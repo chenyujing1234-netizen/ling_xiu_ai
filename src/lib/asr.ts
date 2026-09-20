@@ -221,7 +221,7 @@ export async function transcribeAudio(file: Blob): Promise<string> {
 
   const pcm = await toPcm16(Buffer.from(await file.arrayBuffer()));
   const seconds = pcm.length / (SAMPLE_RATE * 2);
-  if (seconds < 0.3) throw new AiError('说得太短了，按住多说几句');
+  if (seconds < 0.3) throw new AiError('说得太短了，请多说几句');
 
   // 识别本身很快（5 秒音频约 1 秒），但长录音要留出余量
   const timeoutMs = Math.min(180_000, 30_000 + seconds * 2000);

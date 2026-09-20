@@ -85,7 +85,7 @@ export default function Dictate({
               <p className="mt-3 rounded-xl bg-accent/10 px-3.5 py-2.5 text-sm text-accent">{error}</p>
             )}
 
-            <Recorder busy={busy} onDone={handle} note={hint} />
+            <Recorder autoStart busy={busy} onDone={handle} note={hint} />
           </div>
         </>
       )}

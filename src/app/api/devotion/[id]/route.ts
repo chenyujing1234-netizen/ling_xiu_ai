@@ -1,6 +1,14 @@
 import { handler, notFound } from '@/lib/api';
 import { requireSession } from '@/lib/auth';
-import { getDevotion, inputsOf, canAdvance, STAGE_META, UNLOCK_SCORE } from '@/lib/devotion';
+import {
+  getDevotion,
+  inputsOf,
+  canAdvance,
+  STAGE_META,
+  UNLOCK_SCORE,
+  stageFeedbacksMap,
+  stageFeedbackRagSourcesMap,
+} from '@/lib/devotion';
 import { resolveRange } from '@/lib/insights';
 import { db } from '@/lib/db';
 
@@ -16,7 +24,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     const showCoach = ['guided', 'life', 'prayer', 'done'].includes(d.stage);
 
     // 这几项互不依赖，一次并发发出去；数据库在外网，串起来问就是七倍的等待
-    const [r, inputs, prompts, scores, coach, notes, gate] = await Promise.all([
+    const [r, inputs, prompts, scores, coach, notes, gate, stageFeedbacks, stageFeedbackRagSources] =
+      await Promise.all([
       resolveRange(d.book_id, d.chapter, d.verse_start, d.verse_end),
       inputsOf(d.id),
       conn
@@ -32,7 +41,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       showCoach
         ? conn
             .prepare(
-              `SELECT role, content, created_at FROM coach_messages WHERE devotion_id = ? ORDER BY id`,
+              `SELECT role, content, created_at, rag_sources FROM coach_messages WHERE devotion_id = ? ORDER BY id`,
             )
             .all(d.id)
         : Promise.resolve([]),
@@ -43,7 +52,19 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         )
         .all(session.uid, d.book_id, d.chapter),
       canAdvance(d),
+      stageFeedbacksMap(d.id),
+      stageFeedbackRagSourcesMap(d.id),
     ]);
+
+    const { parseRagSources } = await import('@/lib/rag-sources');
+    const coachOut = (coach as { role: string; content: string; created_at: string; rag_sources?: string | null }[]).map(
+      (m) => ({
+        role: m.role,
+        content: m.content,
+        created_at: m.created_at,
+        ragSources: m.role === 'coach' ? parseRagSources(m.rag_sources) : [],
+      }),
+    );
 
     return {
       devotion: d,
@@ -59,9 +80,11 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       inputs,
       prompts,
       scores,
-      coach,
+      coach: coachOut,
       notes,
       gate,
+      stageFeedbacks,
+      stageFeedbackRagSources,
     };
   });
 }

@@ -7,7 +7,7 @@ import {
   getMindmap,
   getSceneImage,
   resolveRange,
-  isCached,
+  readCachedInsight,
 } from '@/lib/insights';
 import { db } from '@/lib/db';
 import { UNLOCK_SCORE } from '@/lib/devotion';
@@ -32,35 +32,58 @@ export async function GET(req: Request) {
 
     if (kind === 'context') {
       const verse = intParam(req, 'verse');
-      if (cacheOnly && !(await isCached(bookId, chapter, kind, { verse }))) return { kind, data: null };
-      return { kind, data: await getContextInsight(bookId, chapter, verse, force) };
+      if (cacheOnly) {
+        const hit = await readCachedInsight(bookId, chapter, kind, { verse });
+        return hit ? { kind, data: hit.data, ragSources: hit.ragSources } : { kind, data: null };
+      }
+      const ctx = await getContextInsight(bookId, chapter, verse, force);
+      return { kind, data: ctx.data, ragSources: ctx.ragSources };
     }
 
     const from = intParam(req, 'from', 1);
     const to = intParam(req, 'to', 0);
 
-    if (cacheOnly && kind !== 'meta' && !(await isCached(bookId, chapter, kind, { from, to }))) {
-      return { kind, data: null };
-    }
-
-    switch (kind) {
-      case 'elements': {
-        const data = await getElements(bookId, chapter, from, to, force);
+    if (cacheOnly && kind !== 'meta') {
+      const hit = await readCachedInsight(bookId, chapter, kind, { from, to });
+      if (!hit) return { kind, data: null };
+      if (kind === 'elements') {
         const unlocked = await hasUnlocked(session.uid, bookId, chapter);
-        if (unlocked) return { kind, data, unlocked };
-        // 未解锁：抽掉解读性内容，保留基础事实
-        const { thesis, reflection, ...rest } = data;
+        if (unlocked) return { kind, data: hit.data, unlocked, ragSources: hit.ragSources };
+        const { thesis, reflection, ...rest } = hit.data as Awaited<ReturnType<typeof getElements>>['data'];
         return {
           kind,
           data: { ...rest, thesis: null, reflection: null },
           unlocked: false,
           lockedHint: `要义与反思需要你先在灵修中写下自己的思考（评估达 ${UNLOCK_SCORE()} 分）后揭晓`,
+          ragSources: hit.ragSources,
         };
       }
-      case 'graph':
-        return { kind, data: await getGraph(bookId, chapter, from, to, force) };
-      case 'mindmap':
-        return { kind, data: await getMindmap(bookId, chapter, from, to, force) };
+      return { kind, data: hit.data, ragSources: hit.ragSources };
+    }
+
+    switch (kind) {
+      case 'elements': {
+        const el = await getElements(bookId, chapter, from, to, force);
+        const unlocked = await hasUnlocked(session.uid, bookId, chapter);
+        if (unlocked) return { kind, data: el.data, unlocked, ragSources: el.ragSources };
+        // 未解锁：抽掉解读性内容，保留基础事实
+        const { thesis, reflection, ...rest } = el.data;
+        return {
+          kind,
+          data: { ...rest, thesis: null, reflection: null },
+          unlocked: false,
+          lockedHint: `要义与反思需要你先在灵修中写下自己的思考（评估达 ${UNLOCK_SCORE()} 分）后揭晓`,
+          ragSources: el.ragSources,
+        };
+      }
+      case 'graph': {
+        const g = await getGraph(bookId, chapter, from, to, force);
+        return { kind, data: g.data, ragSources: g.ragSources };
+      }
+      case 'mindmap': {
+        const m = await getMindmap(bookId, chapter, from, to, force);
+        return { kind, data: m.data, ragSources: m.ragSources };
+      }
       case 'image':
         return { kind, data: await getSceneImage(bookId, chapter, from, to) };
       case 'meta':

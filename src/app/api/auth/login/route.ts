@@ -9,6 +9,8 @@ import {
   HttpError,
 } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { sanitizeLastPath } from '@/lib/last-path';
+import { setResumeCookie } from '@/lib/resume';
 
 const Schema = z.object({
   phone: z.string().trim().min(4, '请输入手机号'),
@@ -38,6 +40,9 @@ export async function POST(req: Request) {
     if (!verifyPassword(password, user!.password_hash)) await fail();
 
     await recordAttempt(phone, true);
+    const row = await db()
+      .prepare(`SELECT last_path FROM users WHERE id = ?`)
+      .get<{ last_path: string | null }>(user!.id);
     await db().prepare(`UPDATE users SET last_login_at = NOW() WHERE id = ?`).run(user!.id);
 
     await setSessionCookie({
@@ -47,6 +52,13 @@ export async function POST(req: Request) {
       mustChangePw: Boolean(user!.must_change_pw),
     });
 
-    return { ok: true, mustChangePw: Boolean(user!.must_change_pw) };
+    const lastPath = sanitizeLastPath(row?.last_path) ?? null;
+    await setResumeCookie(lastPath);
+
+    return {
+      ok: true,
+      mustChangePw: Boolean(user!.must_change_pw),
+      lastPath,
+    };
   });
 }

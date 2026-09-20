@@ -1,9 +1,26 @@
+import { createHash } from 'crypto';
 import { db, today, transaction } from './db';
 import { chat, chatJson, chatStream, MODELS, aiConfigured, type StreamEvent } from './ai';
-import { questionPrompt, scorePrompt, guidePrompt, nudgePrompt, coachTurnPrompt } from './prompts';
-import { fallbackQuestions, fallbackScore, fallbackGuide, fallbackNudges } from './fallback';
+import {
+  questionPrompt,
+  scorePrompt,
+  guidePrompt,
+  nudgePrompt,
+  coachTurnPrompt,
+  stageFeedbackPrompt,
+  COACH_PERSONA,
+} from './prompts';
+import {
+  fallbackQuestions,
+  fallbackScore,
+  fallbackGuide,
+  fallbackNudges,
+  fallbackStageFeedback,
+} from './fallback';
 import { resolveRange } from './insights';
 import { passageText } from './bible';
+import { knowledgeForLlm } from './knowledge-context';
+import { parseRagSources, serializeRagSources, type RagSource } from './rag-sources';
 
 /** 七个阶段，强制顺序推进（R-D） */
 export const STAGES = ['observe', 'inquire', 'reflect', 'guided', 'life', 'prayer', 'done'] as const;
@@ -53,7 +70,7 @@ export type PromptRow = {
   question: string;
 };
 
-export const UNLOCK_SCORE = () => Number(process.env.DEVOTION_UNLOCK_SCORE || 60);
+export const UNLOCK_SCORE = () => Number(process.env.DEVOTION_UNLOCK_SCORE || 40);
 
 // 推理模型光思考就要烧 1000-2800 token，给结构化任务留足预算。
 // 实测评分任务（整章经文 + 四维度理由）在 6000 会被截断，所以给到 9000。
@@ -66,7 +83,8 @@ function logDegrade(scene: string, err: unknown) {
 }
 
 // 各阶段的最低输入门槛 —— 这是"不能敷衍"的硬约束
-export const MIN_OBSERVATION_CHARS = 30;
+/** 观察阶段：有一条有效输入即可进入下一步 */
+export const MIN_OBSERVATION_ENTRIES = 1;
 export const MIN_QUESTIONS = 2;
 export const MIN_ANSWER_CHARS = 20;
 
@@ -122,13 +140,22 @@ export async function addInput(
   kind: string,
   content: string,
   extra: { refVerse?: number | null; promptId?: number | null; mediaPath?: string | null } = {},
-) {
-  await db()
+): Promise<number> {
+  const info = await db()
     .prepare(
       `INSERT INTO devotion_inputs (devotion_id, kind, content, ref_verse, prompt_id, media_path)
        VALUES (?, ?, ?, ?, ?, ?)`,
     )
     .run(devotionId, kind, content, extra.refVerse ?? null, extra.promptId ?? null, extra.mediaPath ?? null);
+  await touch(devotionId);
+  return Number(info.lastInsertRowid);
+}
+
+export async function updateInput(inputId: number, devotionId: number, content: string) {
+  const r = await db()
+    .prepare(`UPDATE devotion_inputs SET content = ? WHERE id = ? AND devotion_id = ?`)
+    .run(content, inputId, devotionId);
+  if (!r.changes) throw new Error('记录不存在');
   await touch(devotionId);
 }
 
@@ -149,9 +176,9 @@ export async function canAdvance(d: Devotion): Promise<{ ok: boolean; reason?: s
 
   switch (d.stage) {
     case 'observe': {
-      const chars = text('observation').replace(/\s/g, '').length;
-      if (chars < MIN_OBSERVATION_CHARS) {
-        return { ok: false, reason: `观察还需要再写 ${MIN_OBSERVATION_CHARS - chars} 字` };
+      const n = inputs.filter((i) => i.kind === 'observation' && i.content.trim().length > 0).length;
+      if (n < MIN_OBSERVATION_ENTRIES) {
+        return { ok: false, reason: '先写下你看见的，至少一条' };
       }
       return { ok: true };
     }
@@ -204,6 +231,250 @@ export function nextStage(stage: Stage): Stage {
   return STAGES[Math.min(i + 1, STAGES.length - 1)];
 }
 
+export function prevStage(stage: Stage): Stage | null {
+  const i = STAGES.indexOf(stage);
+  if (i <= 0) return null;
+  return STAGES[i - 1];
+}
+
+/** 回到上一阶段；已写内容保留，便于修改后重新提交 */
+export async function retreatStage(d: Devotion): Promise<Stage> {
+  const prev = prevStage(d.stage);
+  if (!prev) throw new Error('已经是第一步');
+  if (d.stage === 'done') {
+    await db()
+      .prepare(`UPDATE devotions SET stage = ?, completed_at = NULL WHERE id = ?`)
+      .run(prev, d.id);
+    await touch(d.id);
+  } else {
+    await setStage(d.id, prev);
+  }
+  return prev;
+}
+
+export const FEEDBACK_ON_ADVANCE: Stage[] = ['observe', 'inquire', 'reflect', 'guided', 'life'];
+
+export type FeedbackStage = (typeof FEEDBACK_ON_ADVANCE)[number];
+
+/** 用于判断该步内容是否相对上次点评有改动 */
+export async function stageContentFingerprint(d: Devotion, stage: Stage): Promise<string> {
+  const inputs = await inputsOf(d.id);
+  let payload = '';
+
+  switch (stage) {
+    case 'observe':
+      payload = inputs
+        .filter((i) => i.kind === 'observation')
+        .map((i) => i.content.trim())
+        .join('\n');
+      break;
+    case 'inquire':
+      payload = inputs
+        .filter((i) => i.kind === 'question')
+        .map((i) => i.content.trim())
+        .join('\n');
+      break;
+    case 'reflect':
+      payload = [
+        inputs
+          .filter((i) => i.kind === 'answer')
+          .map((i) => `${i.prompt_id ?? 0}:${i.content.trim()}`)
+          .join('\n'),
+        `score:${d.score}`,
+        `unlocked:${d.unlocked}`,
+      ].join('\n');
+      break;
+    case 'guided': {
+      const msgs = await db()
+        .prepare(
+          `SELECT role, content FROM coach_messages WHERE devotion_id = ? AND role IN ('user','coach') ORDER BY id`,
+        )
+        .all<{ role: string; content: string }>(d.id);
+      payload = msgs.map((m) => `${m.role}:${m.content.trim()}`).join('\n');
+      break;
+    }
+    case 'life':
+      payload = inputs
+        .filter((i) => i.kind === 'life_fact')
+        .map((i) => i.content.trim())
+        .join('\n');
+      break;
+    default:
+      payload = '';
+  }
+
+  return createHash('sha256').update(payload).digest('hex');
+}
+
+export async function getCachedStageFeedback(
+  devotionId: number,
+  stage: FeedbackStage,
+): Promise<{ content_hash: string; feedback: string; rag_sources: string | null } | null> {
+  const row = await db()
+    .prepare(
+      `SELECT content_hash, feedback, rag_sources FROM devotion_stage_feedback WHERE devotion_id = ? AND stage = ?`,
+    )
+    .get<{ content_hash: string; feedback: string; rag_sources: string | null }>(devotionId, stage);
+  return row ?? null;
+}
+
+export async function saveStageFeedback(
+  devotionId: number,
+  stage: FeedbackStage,
+  contentHash: string,
+  feedback: string,
+  ragSources?: RagSource[],
+) {
+  const ragJson = serializeRagSources(ragSources);
+  await db()
+    .prepare(
+      `INSERT INTO devotion_stage_feedback (devotion_id, stage, content_hash, feedback, rag_sources)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         content_hash = VALUES(content_hash),
+         feedback = VALUES(feedback),
+         rag_sources = VALUES(rag_sources),
+         updated_at = CURRENT_TIMESTAMP`,
+    )
+    .run(devotionId, stage, contentHash, feedback, ragJson);
+}
+
+export async function stageFeedbacksMap(
+  devotionId: number,
+): Promise<Partial<Record<FeedbackStage, string>>> {
+  const rows = await db()
+    .prepare(`SELECT stage, feedback FROM devotion_stage_feedback WHERE devotion_id = ?`)
+    .all<{ stage: FeedbackStage; feedback: string }>(devotionId);
+  const out: Partial<Record<FeedbackStage, string>> = {};
+  for (const r of rows) {
+    if (r.feedback?.trim()) out[r.stage] = r.feedback;
+  }
+  return out;
+}
+
+export async function stageFeedbackRagSourcesMap(
+  devotionId: number,
+): Promise<Partial<Record<FeedbackStage, RagSource[]>>> {
+  const rows = await db()
+    .prepare(`SELECT stage, rag_sources FROM devotion_stage_feedback WHERE devotion_id = ?`)
+    .all<{ stage: FeedbackStage; rag_sources: string | null }>(devotionId);
+  const out: Partial<Record<FeedbackStage, RagSource[]>> = {};
+  for (const r of rows) {
+    const src = parseRagSources(r.rag_sources);
+    if (src.length) out[r.stage] = src;
+  }
+  return out;
+}
+
+/** 点「下一步」时，对刚完成这一步的输入做短评（advance 侧负责缓存命中则跳过） */
+export async function stageFeedback(
+  d: Devotion,
+  fromStage: Stage,
+): Promise<{ feedback: string | null; ragSources: RagSource[] }> {
+  if (!FEEDBACK_ON_ADVANCE.includes(fromStage)) return { feedback: null, ragSources: [] };
+
+  const inputs = await inputsOf(d.id);
+  const r = await resolveRange(d.book_id, d.chapter, d.verse_start, d.verse_end);
+  const passage = passageText(r.verses, 'cn').slice(0, 2800);
+
+  let userContent = '';
+  let extra = '';
+
+  switch (fromStage) {
+    case 'observe':
+      userContent = inputs
+        .filter((i) => i.kind === 'observation')
+        .map((i) => i.content)
+        .join('\n');
+      break;
+    case 'inquire':
+      userContent = inputs
+        .filter((i) => i.kind === 'question')
+        .map((i) => i.content)
+        .join('\n');
+      break;
+    case 'reflect':
+      userContent = inputs
+        .filter((i) => i.kind === 'answer')
+        .map((i) => i.content)
+        .join('\n\n');
+      extra = [
+        inputs.filter((i) => i.kind === 'question').length
+          ? `他自己提的问题：\n${inputs
+              .filter((i) => i.kind === 'question')
+              .map((i) => i.content)
+              .join('\n')}`
+          : '',
+        d.score ? `本次默想评估 ${d.score} 分` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+      break;
+    case 'guided': {
+      const msgs = await db()
+        .prepare(
+          `SELECT role, content FROM coach_messages WHERE devotion_id = ? AND role IN ('user','coach') ORDER BY id`,
+        )
+        .all<{ role: string; content: string }>(d.id);
+      userContent = msgs
+        .filter((m) => m.role === 'user')
+        .map((m) => m.content)
+        .join('\n');
+      const coachText = msgs
+        .filter((m) => m.role === 'coach')
+        .map((m) => m.content)
+        .join('\n\n');
+      if (coachText) extra = `同行者说过的话（节选）：\n${coachText.slice(0, 1200)}`;
+      if (!userContent.trim()) userContent = '（引导阶段用户没有追加对话，主要阅读了同行者的回应）';
+      break;
+    }
+    case 'life':
+      userContent = inputs
+        .filter((i) => i.kind === 'life_fact')
+        .map((i) => i.content)
+        .join('\n');
+      break;
+    default:
+      return { feedback: null, ragSources: [] };
+  }
+
+  const stageKey = fromStage as 'observe' | 'inquire' | 'reflect' | 'guided' | 'life';
+  const passageCn = passageText(r.verses, 'cn');
+
+  try {
+    if (!aiConfigured()) throw new Error('AI 未配置');
+    const ctx = await knowledgeForLlm({
+      ref: r.label,
+      passage: passageCn,
+      focus: userContent,
+    });
+    const feedback = await chat(
+      [
+        { role: 'system', content: COACH_PERSONA },
+        {
+          role: 'user',
+          content: stageFeedbackPrompt({
+            stage: stageKey,
+            ref: r.label,
+            passage,
+            userContent,
+            extra: extra || undefined,
+            knowledge: ctx.knowledge,
+          }),
+        },
+      ],
+      { model: MODELS.fast(), maxTokens: 550, temperature: 0.72 },
+    );
+    return { feedback, ragSources: ctx.ragSources };
+  } catch (err) {
+    logDegrade(`阶段点评(${fromStage})`, err);
+    return {
+      feedback: fallbackStageFeedback(stageKey, userContent.replace(/（引导阶段.*?）/, '')),
+      ragSources: [],
+    };
+  }
+}
+
 // ---------- AI 环节 ----------
 
 /** 生成四层思辨题（缓存到 devotion_prompts，避免每次刷新都重新出题） */
@@ -218,8 +489,9 @@ export async function ensurePrompts(d: Devotion): Promise<PromptRow[]> {
 
   try {
     if (!aiConfigured()) throw new Error('AI 未配置');
-    const [knowledge, history] = await Promise.all([
-      knowledgeSnippets(),
+    const passageCn = passageText(r.verses, 'cn');
+    const [knowledgeCtx, history] = await Promise.all([
+      knowledgeForLlm({ ref: r.label, passage: passageCn }),
       userHistoryDigest(d.user_id, d.id),
     ]);
     const res = await chatJson<{ questions: typeof questions }>(
@@ -229,9 +501,9 @@ export async function ensurePrompts(d: Devotion): Promise<PromptRow[]> {
           role: 'user',
           content: questionPrompt({
             ref: r.label,
-            passage: passageText(r.verses, 'cn'),
+            passage: passageCn,
             genre: r.genre,
-            knowledge,
+            knowledge: knowledgeCtx.knowledge,
             history,
           }),
         },
@@ -263,6 +535,7 @@ export type ScoreResult = {
   scores: { dimension: string; score: number; reason: string }[];
   encouragement: string;
   degraded: boolean;
+  ragSources: RagSource[];
 };
 
 export async function scoreDevotion(d: Devotion): Promise<ScoreResult> {
@@ -286,9 +559,17 @@ export async function scoreDevotion(d: Devotion): Promise<ScoreResult> {
 
   let result: { scores: ScoreResult['scores']; encouragement: string };
   let degraded = false;
+  let scoreRagSources: RagSource[] = [];
+
+  const passageCn = passageText(r.verses, 'cn');
 
   try {
     if (!aiConfigured()) throw new Error('AI 未配置');
+    const knowledgeCtx = await knowledgeForLlm({
+      ref: r.label,
+      passage: passageCn,
+      focus: [observation, questions, answers].join('\n'),
+    });
     result = await chatJson(
       [
         { role: 'system', content: '你是灵修同行者，评估读者的投入质量，只输出 JSON。' },
@@ -296,20 +577,23 @@ export async function scoreDevotion(d: Devotion): Promise<ScoreResult> {
           role: 'user',
           content: scorePrompt({
             ref: r.label,
-            passage: passageText(r.verses, 'cn'),
+            passage: passageCn,
             observation,
             questions,
             answers,
+            knowledge: knowledgeCtx.knowledge,
           }),
         },
       ],
       { model: MODELS.fast(), maxTokens: TOKENS_JSON, temperature: 0.3 },
     );
     if (!result.scores?.length) throw new Error('评分为空');
+    scoreRagSources = knowledgeCtx.ragSources;
   } catch (err) {
     logDegrade('评分', err);
     result = fallbackScore({ observation, questions, answers, passage: passageText(r.verses, 'cn') });
     degraded = true;
+    scoreRagSources = [];
   }
 
   const total = Math.round(
@@ -330,7 +614,14 @@ export async function scoreDevotion(d: Devotion): Promise<ScoreResult> {
       .run(total, unlocked ? 1 : 0, d.id);
   });
 
-  return { total, unlocked, scores: result.scores, encouragement: result.encouragement ?? '', degraded };
+  return {
+    total,
+    unlocked,
+    scores: result.scores,
+    encouragement: result.encouragement ?? '',
+    degraded,
+    ragSources: scoreRagSources,
+  };
 }
 
 /** 组装引导所需的全部上下文（流式与非流式共用） */
@@ -349,32 +640,41 @@ async function guidanceMessages(d: Devotion) {
   const join = (kind: string) => inputs.filter((i) => i.kind === kind).map((i) => i.content).join('\n');
 
   const notes = noteRows.map((n) => `第${n.verse}节：${n.content}`).join('\n');
+  const passageCn = passageText(r.verses, 'cn');
+  const knowledgeCtx = await knowledgeForLlm({
+    ref: r.label,
+    passage: passageCn,
+    focus: [join('question'), join('answer'), notes].join('\n'),
+  });
 
   return {
     label: r.label,
     questions: join('question'),
+    ragSources: knowledgeCtx.ragSources,
     messages: [
       { role: 'system' as const, content: '你是灵修同行者。' },
       {
         role: 'user' as const,
         content: guidePrompt({
           ref: r.label,
-          passage: passageText(r.verses, 'cn'),
+          passage: passageCn,
           observation: join('observation'),
           questions: join('question'),
           answers: join('answer'),
           notes,
           history,
+          knowledge: knowledgeCtx.knowledge,
         }),
       },
     ],
   };
 }
 
-async function saveGuidance(devotionId: number, text: string) {
+async function saveGuidance(devotionId: number, text: string, ragSources?: RagSource[]) {
+  const ragJson = serializeRagSources(ragSources);
   await db()
-    .prepare(`INSERT INTO coach_messages (devotion_id, role, content) VALUES (?, 'coach', ?)`)
-    .run(devotionId, text);
+    .prepare(`INSERT INTO coach_messages (devotion_id, role, content, rag_sources) VALUES (?, 'coach', ?, ?)`)
+    .run(devotionId, text, ragJson);
 }
 
 /** 引导揭晓（非流式，作为流式失败时的备用路径） */
@@ -389,12 +689,14 @@ export async function generateGuidance(d: Devotion): Promise<string> {
     logDegrade('引导', err);
     text = fallbackGuide(ctx.label, ctx.questions);
   }
-  await saveGuidance(d.id, text);
+  await saveGuidance(d.id, text, ctx.ragSources);
   return text;
 }
 
 /** 引导揭晓（流式）。逐段产出文本，结束后落库。 */
-export async function* streamGuidance(d: Devotion): AsyncGenerator<StreamEvent> {
+export async function* streamGuidance(
+  d: Devotion,
+): AsyncGenerator<StreamEvent | { type: 'done'; text: string; ragSources?: RagSource[] }> {
   const ctx = await guidanceMessages(d);
   try {
     if (!aiConfigured()) throw new Error('AI 未配置');
@@ -403,20 +705,27 @@ export async function* streamGuidance(d: Devotion): AsyncGenerator<StreamEvent> 
       maxTokens: TOKENS_PROSE,
       temperature: 0.75,
     })) {
-      if (event.type === 'done') await saveGuidance(d.id, event.text);
-      yield event;
+      if (event.type === 'done') {
+        await saveGuidance(d.id, event.text, ctx.ragSources);
+        yield { type: 'done', text: event.text, ragSources: ctx.ragSources };
+      } else {
+        yield event;
+      }
     }
   } catch (err) {
     logDegrade('引导(流式)', err);
     const text = fallbackGuide(ctx.label, ctx.questions);
-    await saveGuidance(d.id, text);
+    await saveGuidance(d.id, text, ctx.ragSources);
     yield { type: 'delta', text };
-    yield { type: 'done', text };
+    yield { type: 'done', text, ragSources: ctx.ragSources };
   }
 }
 
 /** 教练多轮对话 */
-export async function coachReply(d: Devotion, userText: string): Promise<string> {
+export async function coachReply(
+  d: Devotion,
+  userText: string,
+): Promise<{ reply: string; ragSources: RagSource[] }> {
   const conn = db();
   await conn
     .prepare(`INSERT INTO coach_messages (devotion_id, role, content) VALUES (?, 'user', ?)`)
@@ -431,12 +740,28 @@ export async function coachReply(d: Devotion, userText: string): Promise<string>
   ]);
   const context = inputs.map((i) => `[${i.kind}] ${i.content}`).join('\n').slice(0, 3000);
 
+  const passageCn = passageText(r.verses, 'cn');
   let reply: string;
+  let ragSources: RagSource[] = [];
   try {
     if (!aiConfigured()) throw new Error('AI 未配置');
+    const knowledgeCtx = await knowledgeForLlm({
+      ref: r.label,
+      passage: passageCn,
+      focus: `${userText}\n${context}`,
+    });
+    ragSources = knowledgeCtx.ragSources;
     reply = await chat(
       [
-        { role: 'system', content: coachTurnPrompt({ ref: r.label, passage: passageText(r.verses, 'cn'), context }) },
+        {
+          role: 'system',
+          content: coachTurnPrompt({
+            ref: r.label,
+            passage: passageCn,
+            context,
+            knowledge: knowledgeCtx.knowledge,
+          }),
+        },
         ...history.slice(-12).map((m) => ({
           role: (m.role === 'coach' ? 'assistant' : 'user') as 'assistant' | 'user',
           content: m.content,
@@ -448,25 +773,34 @@ export async function coachReply(d: Devotion, userText: string): Promise<string>
     logDegrade('教练对话', err);
     reply =
       '（AI 暂时不可用）你刚才说的这一点，如果放在你这一周最难的那件事上，会怎么样？先把它写下来，等服务恢复我们再往下走。';
+    ragSources = [];
   }
 
+  const ragJson = serializeRagSources(ragSources);
   await conn
-    .prepare(`INSERT INTO coach_messages (devotion_id, role, content) VALUES (?, 'coach', ?)`)
-    .run(d.id, reply);
-  return reply;
+    .prepare(`INSERT INTO coach_messages (devotion_id, role, content, rag_sources) VALUES (?, 'coach', ?, ?)`)
+    .run(d.id, reply, ragJson);
+  return { reply, ragSources };
 }
 
 /** 兜底追问：想结束却没有任何感悟时（R-D5） */
 export async function generateNudges(bookId: number, chapter: number, from = 1, to = 0): Promise<string[]> {
   const r = await resolveRange(bookId, chapter, from, to);
+  const passageCn = passageText(r.verses, 'cn');
   try {
     if (!aiConfigured()) throw new Error('AI 未配置');
+    const knowledgeCtx = await knowledgeForLlm({ ref: r.label, passage: passageCn });
     const res = await chatJson<{ questions: string[] }>(
       [
         { role: 'system', content: '你是灵修同行者，只输出 JSON。' },
         {
           role: 'user',
-          content: nudgePrompt({ ref: r.label, passage: passageText(r.verses, 'cn'), genre: r.genre }),
+          content: nudgePrompt({
+            ref: r.label,
+            passage: passageCn,
+            genre: r.genre,
+            knowledge: knowledgeCtx.knowledge,
+          }),
         },
       ],
       { model: MODELS.fast(), maxTokens: TOKENS_JSON, temperature: 0.9 },
@@ -503,15 +837,6 @@ export async function userHistoryDigest(
   return rows
     .map((r) => `${r.name_cn}${r.chapter}章 ${label[r.kind] ?? r.kind}：${r.content.slice(0, 90)}`)
     .join('\n');
-}
-
-/** 知识库取材（R-E3），无内容则返回空串，出题自动退回大众文化素材 */
-export async function knowledgeSnippets(): Promise<string> {
-  const rows = await db()
-    .prepare(`SELECT title, category, content FROM knowledge_docs ORDER BY id DESC LIMIT 5`)
-    .all<{ title: string; category: string | null; content: string }>();
-  if (!rows.length) return '';
-  return rows.map((r) => `【${r.category ?? '资料'}】${r.title}\n${r.content.slice(0, 500)}`).join('\n\n');
 }
 
 /** 完成灵修，并把当天该章标记为"真正读过"（R-D6） */

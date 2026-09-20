@@ -6,15 +6,24 @@ export async function api<T = unknown>(
   init: RequestInit & { json?: unknown } = {},
 ): Promise<T> {
   const { json, ...rest } = init;
-  const res = await fetch(path, {
-    ...rest,
-    method: rest.method ?? (json ? 'POST' : 'GET'),
-    headers: json
-      ? { 'Content-Type': 'application/json', ...(rest.headers ?? {}) }
-      : rest.headers,
-    body: json ? JSON.stringify(json) : rest.body,
-    credentials: 'same-origin',
-  });
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      ...rest,
+      method: rest.method ?? (json ? 'POST' : 'GET'),
+      headers: json
+        ? { 'Content-Type': 'application/json', ...(rest.headers ?? {}) }
+        : rest.headers,
+      body: json ? JSON.stringify(json) : rest.body,
+      credentials: 'same-origin',
+    });
+  } catch (err) {
+    const msg = (err as Error).message;
+    throw new ApiError(
+      msg === 'Failed to fetch' ? '网络异常，请稍后重试' : msg || '网络异常，请稍后重试',
+      0,
+    );
+  }
 
   const text = await res.text();
   let data: unknown = null;

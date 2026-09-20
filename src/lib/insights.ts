@@ -10,6 +10,8 @@ import {
 } from './prompts';
 import { getBook, getRange, passageText, refKey, refLabel, contextWindow, getVerse } from './bible';
 import { saveSceneImage } from './media';
+import { parseRagSources, serializeRagSources, type RagSource } from './rag-sources';
+import { knowledgeForLlm } from './knowledge-context';
 
 // ---------- 类型 ----------
 
@@ -54,14 +56,28 @@ async function readCache<T>(key: string, kind: string): Promise<T | null> {
   }
 }
 
-async function writeCache(key: string, kind: string, payload: unknown, model: string) {
+async function readRagSources(key: string, kind: string): Promise<RagSource[]> {
+  const row = await db()
+    .prepare(`SELECT rag_sources FROM passage_insights WHERE ref_key = ? AND kind = ?`)
+    .get<{ rag_sources: string | null }>(key, kind);
+  return parseRagSources(row?.rag_sources);
+}
+
+async function writeCache(
+  key: string,
+  kind: string,
+  payload: unknown,
+  model: string,
+  ragSources?: RagSource[],
+) {
+  const ragJson = serializeRagSources(ragSources);
   await db()
     .prepare(
-      `INSERT INTO passage_insights (ref_key, kind, payload, model) VALUES (?, ?, ?, ?)
+      `INSERT INTO passage_insights (ref_key, kind, payload, model, rag_sources) VALUES (?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE payload = VALUES(payload), model = VALUES(model),
-       created_at = NOW()`,
+       rag_sources = VALUES(rag_sources), created_at = NOW()`,
     )
-    .run(key, kind, JSON.stringify(payload), model);
+    .run(key, kind, JSON.stringify(payload), model, ragJson);
 }
 
 export async function clearCache(key: string) {
@@ -91,19 +107,37 @@ export async function isCached(
   return (await readCache(key, kind)) !== null;
 }
 
+/** 只读缓存（含 RAG 引用来源），不触发 AI */
+export async function readCachedInsight<T>(
+  bookId: number,
+  chapter: number,
+  kind: string,
+  opts: { from?: number; to?: number; verse?: number } = {},
+): Promise<InsightResult<T> | null> {
+  const key =
+    opts.verse !== undefined
+      ? contextKey(bookId, chapter, opts.verse)
+      : (await resolveRange(bookId, chapter, opts.from ?? 1, opts.to ?? 0)).key;
+  const data = await readCache<T>(key, kind);
+  if (!data) return null;
+  return { data, ragSources: await readRagSources(key, kind) };
+}
+
+export type InsightResult<T> = { data: T; ragSources: RagSource[] };
+
 /** 统一入口：先查缓存，miss 才调 AI（R-C5 控制成本） */
 async function cached<T>(
   key: string,
   kind: string,
-  produce: () => Promise<T>,
+  produce: () => Promise<{ data: T; ragSources: RagSource[] }>,
   force = false,
-): Promise<T> {
+): Promise<InsightResult<T>> {
   if (!force) {
     const hit = await readCache<T>(key, kind);
-    if (hit) return hit;
+    if (hit) return { data: hit, ragSources: await readRagSources(key, kind) };
   }
   const fresh = await produce();
-  await writeCache(key, kind, fresh, MODELS.fast());
+  await writeCache(key, kind, fresh.data, MODELS.fast(), fresh.ragSources);
   return fresh;
 }
 
@@ -131,27 +165,31 @@ export async function getElements(
   from = 1,
   to = 0,
   force = false,
-): Promise<Elements> {
+): Promise<InsightResult<Elements>> {
   const r = await resolveRange(bookId, chapter, from, to);
   return cached<Elements>(
     r.key,
     'elements',
     async () => {
       if (!aiConfigured()) throw new Error('AI 未配置，无法生成结构化梳理');
-      return await chatJson<Elements>(
+      const passageCn = passageText(r.verses, 'cn');
+      const knowledgeCtx = await knowledgeForLlm({ ref: r.label, passage: passageCn });
+      const data = await chatJson<Elements>(
         [
           { role: 'system', content: '你是熟悉圣经历史背景与古代近东研究的助手，只输出 JSON。' },
           {
             role: 'user',
             content: elementsPrompt({
               ref: r.label,
-              passage: passageText(r.verses, 'cn'),
+              passage: passageCn,
               genre: r.genre,
+              knowledge: knowledgeCtx.knowledge,
             }),
           },
         ],
         { model: MODELS.fast(), maxTokens: 9000 },
       );
+      return { data, ragSources: knowledgeCtx.ragSources };
     },
     force,
   );
@@ -162,9 +200,10 @@ export async function getContextInsight(
   chapter: number,
   verse: number,
   force = false,
-): Promise<ContextInsight> {
+): Promise<InsightResult<ContextInsight>> {
+  const key = contextKey(bookId, chapter, verse);
   return cached<ContextInsight>(
-    contextKey(bookId, chapter, verse),
+    key,
     'context',
     async () => {
       if (!aiConfigured()) throw new Error('AI 未配置，无法生成上下文分析');
@@ -173,21 +212,30 @@ export async function getContextInsight(
         getVerse(bookId, chapter, verse),
         contextWindow(bookId, chapter, verse, 10),
       ]);
-      return await chatJson<ContextInsight>(
+      const ref = await refLabel(bookId, chapter, verse);
+      const verseText = `${target?.cn ?? ''}${target?.en ? `\n[EN] ${target.en}` : ''}`;
+      const knowledgeCtx = await knowledgeForLlm({
+        ref,
+        passage: verseText,
+        focus: passageText(before, 'cn') + passageText(after, 'cn'),
+      });
+      const data = await chatJson<ContextInsight>(
         [
           { role: 'system', content: '你熟悉圣经文学结构与释经学，只输出 JSON。' },
           {
             role: 'user',
             content: contextPrompt({
-              ref: await refLabel(bookId, chapter, verse),
-              verseText: `${target?.cn ?? ''}${target?.en ? `\n[EN] ${target.en}` : ''}`,
+              ref,
+              verseText,
               before: passageText(before, 'cn'),
               after: passageText(after, 'cn'),
+              knowledge: knowledgeCtx.knowledge,
             }),
           },
         ],
         { model: MODELS.fast(), maxTokens: 9000 },
       );
+      return { data, ragSources: knowledgeCtx.ragSources };
     },
     force,
   );
@@ -199,24 +247,29 @@ export async function getGraph(
   from = 1,
   to = 0,
   force = false,
-): Promise<GraphData> {
+): Promise<InsightResult<GraphData>> {
   const r = await resolveRange(bookId, chapter, from, to);
   return cached<GraphData>(
     r.key,
     'graph',
     async () => {
       if (!aiConfigured()) throw new Error('AI 未配置，无法生成知识图谱');
+      const passageCn = passageText(r.verses, 'cn');
+      const knowledgeCtx = await knowledgeForLlm({ ref: r.label, passage: passageCn });
       const data = await chatJson<GraphData>(
         [
           { role: 'system', content: '你擅长把叙事文本转成知识图谱，只输出 JSON。' },
-          { role: 'user', content: graphPrompt({ ref: r.label, passage: passageText(r.verses, 'cn') }) },
+          {
+            role: 'user',
+            content: graphPrompt({ ref: r.label, passage: passageCn, knowledge: knowledgeCtx.knowledge }),
+          },
         ],
         { model: MODELS.fast(), maxTokens: 9000 },
       );
       // 丢弃指向不存在节点的边，避免前端力导向布局崩溃
       const ids = new Set(data.nodes.map((n) => n.id));
       data.edges = (data.edges ?? []).filter((e) => ids.has(e.from) && ids.has(e.to));
-      return data;
+      return { data, ragSources: knowledgeCtx.ragSources };
     },
     force,
   );
@@ -228,23 +281,26 @@ export async function getMindmap(
   from = 1,
   to = 0,
   force = false,
-): Promise<MindmapNode> {
+): Promise<InsightResult<MindmapNode>> {
   const r = await resolveRange(bookId, chapter, from, to);
   return cached<MindmapNode>(
     r.key,
     'mindmap',
     async () => {
       if (!aiConfigured()) throw new Error('AI 未配置，无法生成思维导图');
-      return await chatJson<MindmapNode>(
+      const passageCn = passageText(r.verses, 'cn');
+      const knowledgeCtx = await knowledgeForLlm({ ref: r.label, passage: passageCn });
+      const data = await chatJson<MindmapNode>(
         [
           { role: 'system', content: '你擅长把文本整理成层级清晰的思维导图，只输出 JSON。' },
           {
             role: 'user',
-            content: mindmapPrompt({ ref: r.label, passage: passageText(r.verses, 'cn') }),
+            content: mindmapPrompt({ ref: r.label, passage: passageCn, knowledge: knowledgeCtx.knowledge }),
           },
         ],
         { model: MODELS.fast(), maxTokens: 9000 },
       );
+      return { data, ragSources: knowledgeCtx.ragSources };
     },
     force,
   );
@@ -284,8 +340,8 @@ export async function getSceneImage(
     let places: string[] = [];
     try {
       const el = await getElements(bookId, chapter, from, to);
-      thesis = el.thesis || thesis;
-      places = (el.places ?? []).map((p) => p.name).slice(0, 3);
+      thesis = el.data.thesis || thesis;
+      places = (el.data.places ?? []).map((p) => p.name).slice(0, 3);
     } catch {
       /* 没有 elements 也能出图，只是提示词弱一些 */
     }

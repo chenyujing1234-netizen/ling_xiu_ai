@@ -8,25 +8,30 @@ const MAX_MS = 120_000;
 const MIN_MS = 500;
 
 /**
- * 口述笔记（R-B3）。按住说话、松开立刻转成文字，音频只在内存里中转，
- * 不落盘也不入库。用浏览器 MediaRecorder，不依赖 SDK，
- * 因此在微信小程序 web-view / 手机浏览器里都能跑（需 HTTPS 或 localhost）。
+ * 口述（R-B3）。点「口述」后自动开录，再点一次结束并转成文字；
+ * 音频只在内存里中转，不落盘也不入库。
  */
 export default function Recorder({
   onDone,
   busy,
   note,
+  autoStart,
 }: {
   onDone: (blob: Blob) => void;
   busy?: boolean;
   /** 松开之后文字去哪儿，由调用方说明：笔记那边是直接记下，灵修那边是填回输入框 */
   note?: string;
+  /** 为 true 时挂载后立刻开始录音（口述弹层 / 口述页签） */
+  autoStart?: boolean;
 }) {
   const [state, setState] = useState<'idle' | 'starting' | 'recording'>('idle');
   const [ms, setMs] = useState(0);
   const [error, setError] = useState('');
 
-  const holding = useRef(false);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  const active = useRef(false);
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -37,35 +42,36 @@ export default function Recorder({
     timer.current = null;
   }, []);
 
-  useEffect(
-    () => () => {
-      if (timer.current) clearInterval(timer.current);
-      recorder.current?.stream.getTracks().forEach((t) => t.stop());
-    },
-    [],
-  );
-
   const stop = useCallback(() => {
     clearTimer();
     const rec = recorder.current;
     if (rec && rec.state !== 'inactive') rec.stop();
   }, [clearTimer]);
 
-  async function press(e: React.PointerEvent<HTMLButtonElement>) {
-    if (busy || state !== 'idle') return;
-    e.preventDefault();
-    // 手指／鼠标常会滑出按钮外才松开，捕获指针才能稳稳收到 pointerup
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      /* 老浏览器没有指针捕获，退化成普通事件也能用 */
+  const teardown = useCallback(() => {
+    active.current = false;
+    clearTimer();
+    recorder.current?.stream.getTracks().forEach((t) => t.stop());
+    if (recorder.current && recorder.current.state !== 'inactive') {
+      try {
+        recorder.current.stop();
+      } catch {
+        /* already stopped */
+      }
     }
-    holding.current = true;
+    recorder.current = null;
+  }, [clearTimer]);
+
+  useEffect(() => () => teardown(), [teardown]);
+
+  const beginRecording = useCallback(async () => {
+    if (busy || stateRef.current !== 'idle') return;
+    active.current = true;
     setError('');
     setState('starting');
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      holding.current = false;
+      active.current = false;
       setState('idle');
       setError('当前浏览器不支持录音，请改用打字');
       return;
@@ -75,20 +81,18 @@ export default function Recorder({
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
-      holding.current = false;
+      active.current = false;
       setState('idle');
       setError('打不开话筒。请允许麦克风权限，或改用打字');
       return;
     }
 
-    // 首次授权的弹窗可能停留好几秒，等拿到话筒时人早松手了，这时就别录了
-    if (!holding.current) {
+    if (!active.current) {
       stream.getTracks().forEach((t) => t.stop());
       setState('idle');
       return;
     }
 
-    // iOS Safari 只支持 mp4，其它平台优先 webm/opus
     const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((m) =>
       MediaRecorder.isTypeSupported?.(m),
     );
@@ -103,7 +107,7 @@ export default function Recorder({
       setState('idle');
       setMs(0);
       if (spoken < MIN_MS || blob.size === 0) {
-        setError('太短了，按住多说几句');
+        setError('太短了，请多说几句');
         return;
       }
       onDone(blob);
@@ -118,18 +122,31 @@ export default function Recorder({
       const d = Date.now() - startAt.current;
       setMs(d);
       if (d >= MAX_MS) {
-        holding.current = false;
+        active.current = false;
         stop();
       }
     }, 100);
-  }
+  }, [busy, onDone, stop]);
 
-  function release() {
-    if (!holding.current) return;
-    holding.current = false;
-    // 还在等授权就松手了，没有录音机可停
-    if (recorder.current) stop();
-    else setState('idle');
+  useEffect(() => {
+    if (!autoStart || busy) return;
+    void beginRecording();
+    return () => {
+      active.current = false;
+      if (recorder.current) stop();
+    };
+    // 只在挂载 / autoStart 变化时自动开录，不把 beginRecording 放进依赖以免重复触发
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart]);
+
+  function onTap() {
+    if (busy) return;
+    if (state === 'recording') {
+      active.current = false;
+      stop();
+      return;
+    }
+    if (state === 'idle') void beginRecording();
   }
 
   const mmss = `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${String(
@@ -139,10 +156,10 @@ export default function Recorder({
   const hint = busy
     ? '正在转成文字…'
     : state === 'recording'
-      ? '松开就结束'
+      ? '说完点一下结束，自动转成文字'
       : state === 'starting'
         ? '正在打开话筒…'
-        : '按住说话，松开自动转成文字';
+        : '点一下开始录音';
 
   return (
     <div className="flex flex-col items-center gap-4 py-3">
@@ -151,21 +168,24 @@ export default function Recorder({
       <p className="font-mono text-3xl tabular-nums text-ink">{mmss}</p>
 
       <button
-        onPointerDown={press}
-        onPointerUp={release}
-        onPointerCancel={release}
-        onContextMenu={(e) => e.preventDefault()}
-        disabled={busy}
-        style={{ touchAction: 'none' }}
+        type="button"
+        onClick={onTap}
+        disabled={busy || state === 'starting'}
         className={`flex h-[76px] w-[76px] select-none items-center justify-center rounded-full text-white transition active:scale-95 disabled:opacity-60 ${
           state === 'recording' ? 'recording bg-accent' : 'bg-brand-500'
         }`}
-        aria-label="按住说话"
+        aria-label={state === 'recording' ? '结束录音' : '开始录音'}
       >
-        <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <rect x="9" y="3" width="6" height="11" rx="3" />
-          <path d="M5.5 11.5a6.5 6.5 0 0013 0M12 18v3" strokeLinecap="round" />
-        </svg>
+        {state === 'recording' ? (
+          <svg className="h-8 w-8" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <rect x="7" y="7" width="10" height="10" rx="2" />
+          </svg>
+        ) : (
+          <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+            <rect x="9" y="3" width="6" height="11" rx="3" />
+            <path d="M5.5 11.5a6.5 6.5 0 0013 0M12 18v3" strokeLinecap="round" />
+          </svg>
+        )}
       </button>
 
       <p className="text-sm text-muted">{hint}</p>

@@ -7,8 +7,9 @@ import { usePathname } from 'next/navigation';
 // 原来的"发现"和"读经"都并进了"灵修"：这个产品没有脱离灵修的读经，
 // 读经文、就着它灵修、查它的资料，本来就是同一件事的三个面，
 // 摊成几个 Tab 只会让人来回跳。
+/** 带 home=1 表示用户主动点 Tab，勿被 last_path 恢复逻辑弹回灵修页 */
 const TABS = [
-  { href: '/', label: '今日', icon: IconSun },
+  { href: '/?home=1', label: '今日', icon: IconSun },
   { href: '/devotion', label: '灵修', icon: IconFlame },
   { href: '/me', label: '我的', icon: IconUser },
 ];
@@ -23,7 +24,8 @@ export default function BottomTab() {
     >
       <ul className="mx-auto flex max-w-lg">
         {TABS.map((tab) => {
-          const active = tab.href === '/' ? pathname === '/' : pathname.startsWith(tab.href);
+          const active =
+            tab.href.startsWith('/?home=1') ? pathname === '/' : pathname.startsWith(tab.href);
           return (
             <li key={tab.href} className="flex-1">
               <Link

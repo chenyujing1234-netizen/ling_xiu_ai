@@ -6,6 +6,15 @@
  * 但不给标准答案、不下神学定论、不替用户完成灵修。
  */
 
+/** 书本 RAG / 本地资料块：注入到各类生成提示词 */
+export function bookRagKnowledgeSection(knowledge?: string): string {
+  if (!knowledge?.trim()) return '';
+  return `
+【书本知识库检索摘录 —— 请先阅读再回应；可补充背景、注释与多种理解角度，仍须遵守铁律：不给唯一标准神学定论、不替用户完成灵修】
+${knowledge.trim()}
+`;
+}
+
 export const COACH_PERSONA = `你是"灵修同行者"，服事一位中国新教基督徒的个人读经灵修。
 
 【你是谁】
@@ -41,7 +50,7 @@ export function questionPrompt(input: {
 经文正文：
 ${input.passage}
 
-${input.knowledge ? `【可取材的知识库内容】\n${input.knowledge}\n` : ''}
+${bookRagKnowledgeSection(input.knowledge)}
 ${input.history ? `【这位读者过去的灵修痕迹，用来判断他的处境与深浅】\n${input.history}\n` : ''}
 
 【四道题必须分别落在这四个层次上】
@@ -76,6 +85,7 @@ export function scorePrompt(input: {
   observation: string;
   questions: string;
   answers: string;
+  knowledge?: string;
 }): string {
   return `评估这位读者在读经灵修中的投入质量。你在做的不是批改作业，
 而是判断"他是否真的自己思考过了" —— 达标就该放行，不要故意压分为难他。
@@ -92,6 +102,7 @@ ${input.questions || '（空）'}
 
 【他对问题的作答】
 ${input.answers || '（空）'}
+${bookRagKnowledgeSection(input.knowledge)}
 
 【四个维度，各 0-100 分】
 - observation 观察准确度：是否真读了经文、抓到的是不是文本里真实存在的东西（不是凭印象编的）。
@@ -128,6 +139,7 @@ export function guidePrompt(input: {
   answers: string;
   history?: string;
   notes?: string;
+  knowledge?: string;
 }): string {
   return `${COACH_PERSONA}
 
@@ -148,6 +160,7 @@ ${input.answers || '（空）'}
 
 ${input.notes ? `【他在这段经文上的逐节笔记】\n${input.notes}\n` : ''}
 ${input.history ? `【他过去的灵修痕迹】\n${input.history}\n` : ''}
+${bookRagKnowledgeSection(input.knowledge)}
 
 【这次回应的结构 —— 按顺序，不要写小标题，自然分段】
 第一段：**回应他自己的提问**。挑他问得最有分量的那一个，告诉他这个问题问到了什么地方，
@@ -163,8 +176,87 @@ ${input.history ? `【他过去的灵修痕迹】\n${input.history}\n` : ''}
 总长度 350-550 字。不要用 Markdown 标记。`;
 }
 
+/** 某一步点「下一步」时，对刚写的内容做短评（不代替他思考，不给标准答案） */
+export function stageFeedbackPrompt(input: {
+  stage: 'observe' | 'inquire' | 'reflect' | 'guided' | 'life';
+  ref: string;
+  passage: string;
+  userContent: string;
+  extra?: string;
+  knowledge?: string;
+}): string {
+  const step =
+    {
+      observe: '「观察」——只写经文里确实存在的事实，不是感想。',
+      inquire: '「自己提问」——是他心里真实的疑问，不是背标准问题。',
+      reflect: '「默想作答」——是他用自己的话回应思辨题。',
+      guided: '「引导」——是他与同行者的对话里，自己说出的回应。',
+      life: '「生命实事」——是他生命里真实发生过的事。',
+    }[input.stage] ?? '';
+
+  return `${COACH_PERSONA}
+
+读者刚完成灵修流程中的 ${step}
+
+经文出处：${input.ref}
+经文正文（节选）：
+${input.passage}
+
+【他这一步写下的内容】
+${input.userContent || '（没有留下文字）'}
+${input.extra ? `\n【补充上下文】\n${input.extra}\n` : ''}
+${bookRagKnowledgeSection(input.knowledge)}
+
+请写一段**同行者点评**（120-220 字）：
+1. 先具体引用他原话里的 1-2 处，肯定他真的在读、在想的部分；
+2. 再 gently 指出还可以往哪一层推进（追问式，不给标准答案，不下神学定论）；
+3. 像面对面说话，不用 Markdown 标题和条目符号。
+
+只输出点评正文。`;
+}
+
+/** 用户对某一节经文的笔记：同行者点评；若笔记里带着疑问则一并温和解答 */
+export function noteReviewPrompt(input: {
+  ref: string;
+  verseText: string;
+  noteContent: string;
+  godSpoke?: boolean;
+  knowledge?: string;
+}): string {
+  const spoke = input.godSpoke
+    ? '\n读者标记了「这一节神对我说话」——回应时可以留意，但不要替他下定论说"神一定说了什么"。\n'
+    : '';
+
+  return `${COACH_PERSONA}
+
+读者在以下经文旁写下了笔记，请你以同行者身份回应。
+
+经文出处：${input.ref}
+经文正文：
+${input.verseText}
+${spoke}
+【他的笔记】
+${input.noteContent}
+${bookRagKnowledgeSection(input.knowledge)}
+
+请输出一段连贯文字（不用 Markdown 标题、不用条目符号），包含：
+
+1. **点评**（约 120–220 字）：具体引用笔记里 1–2 处原话，肯定他真的在读、在想的部分；再 gently 提示还可以往哪一层推进（追问式，不给标准答案，不下强硬的 theology 定论）。
+
+2. 若笔记里带有**真实的疑问**（例如含问号，或「为什么 / 为何 / 怎么 / 如何 / 是不是 / 能不能 / 吗 / 呢」等），在点评之后另起一段，以「关于你的疑问：」开头，用约 120–200 字结合这节经文的方向作温和解答——可以提出 1–2 种理解，承认有限，不要装作全知。
+
+若笔记里没有疑问，只输出第 1 部分的点评即可。
+
+只输出正文。`;
+}
+
 /** 教练多轮对话 */
-export function coachTurnPrompt(input: { ref: string; passage: string; context: string }): string {
+export function coachTurnPrompt(input: {
+  ref: string;
+  passage: string;
+  context: string;
+  knowledge?: string;
+}): string {
   return `${COACH_PERSONA}
 
 当前经文：${input.ref}
@@ -172,17 +264,19 @@ ${input.passage}
 
 【背景：他这次灵修已经写下的内容】
 ${input.context}
+${bookRagKnowledgeSection(input.knowledge)}
 
 继续与他对话。回应要短（150-250 字），承接他刚说的话，并以一个真问题结束。`;
 }
 
 /** 兜底追问：读完却没有任何感悟时，AI 主动发问（R-D5） */
-export function nudgePrompt(input: { ref: string; passage: string; genre: string }): string {
+export function nudgePrompt(input: { ref: string; passage: string; genre: string; knowledge?: string }): string {
   return `这位读者读完了 ${input.ref}，但没有写下任何感悟就想结束。
 不能让他这样"读过"了。
 
 经文正文：
 ${input.passage}
+${bookRagKnowledgeSection(input.knowledge)}
 
 请提出 3 个问题把他拉回来。要求：
 1. 极低门槛 —— 他此刻是想走的状态，问题必须是他"不用准备就能开口"的那种。
@@ -197,12 +291,18 @@ ${input.passage}
 }
 
 /** 结构化抽取：基本要素 + 时代背景 + 同期事件（R-C1 / R-C2） */
-export function elementsPrompt(input: { ref: string; passage: string; genre: string }): string {
+export function elementsPrompt(input: {
+  ref: string;
+  passage: string;
+  genre: string;
+  knowledge?: string;
+}): string {
   return `对以下经文做结构化梳理，帮助读者记住"读过什么"。
 
 经文出处：${input.ref}（传统分类：${input.genre}，仅供参考，请按实际文体判断）
 经文正文：
 ${input.passage}
+${bookRagKnowledgeSection(input.knowledge)}
 
 要求：
 - people：出场人物。role 写他在这段里的身份作用，不是泛泛介绍。
@@ -237,6 +337,7 @@ export function contextPrompt(input: {
   verseText: string;
   before: string;
   after: string;
+  knowledge?: string;
 }): string {
   return `读者正在细读这一节：${input.ref}
 「${input.verseText}」
@@ -246,6 +347,7 @@ ${input.before || '（本节位于开头，无前文）'}
 
 【后文（本节之后的经文）】
 ${input.after || '（本节位于结尾，无后文）'}
+${bookRagKnowledgeSection(input.knowledge)}
 
 请说明上下文如何影响这一节的理解：
 - before_effect：前文如何铺垫这一节 —— 没有前文，这节会被误读成什么？
@@ -260,12 +362,13 @@ ${input.after || '（本节位于结尾，无后文）'}
 }
 
 /** 知识图谱：节点 + 关系（R-C3） */
-export function graphPrompt(input: { ref: string; passage: string }): string {
+export function graphPrompt(input: { ref: string; passage: string; knowledge?: string }): string {
   return `把以下经文转成知识图谱数据。
 
 经文出处：${input.ref}
 经文正文：
 ${input.passage}
+${bookRagKnowledgeSection(input.knowledge)}
 
 要求：
 - 节点 8-16 个，type 取值：person（人物）/ place（地点）/ event（事件）/ time（时间）/ theme（主题）。
@@ -280,12 +383,13 @@ ${input.passage}
 }
 
 /** 思维导图：树形结构（R-C4） */
-export function mindmapPrompt(input: { ref: string; passage: string }): string {
+export function mindmapPrompt(input: { ref: string; passage: string; knowledge?: string }): string {
   return `把以下经文整理成思维导图。
 
 经文出处：${input.ref}
 经文正文：
 ${input.passage}
+${bookRagKnowledgeSection(input.knowledge)}
 
 要求：
 - 根节点是经文出处。

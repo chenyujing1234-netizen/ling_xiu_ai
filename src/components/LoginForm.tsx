@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api, hardNavigate } from '@/lib/client';
+import { sanitizeLastPath } from '@/lib/last-path';
 
 export default function LoginForm() {
   const params = useSearchParams();
@@ -16,11 +17,14 @@ export default function LoginForm() {
     setError('');
     setBusy(true);
     try {
-      const res = await api<{ mustChangePw: boolean }>('/api/auth/login', {
+      const res = await api<{ mustChangePw: boolean; lastPath?: string | null }>('/api/auth/login', {
         json: { phone, password },
       });
       const next = params.get('next');
-      hardNavigate(res.mustChangePw ? '/me/password?first=1' : next || '/');
+      const dest = res.mustChangePw
+        ? '/me/password?first=1'
+        : sanitizeLastPath(next) || res.lastPath || '/';
+      hardNavigate(dest);
     } catch (err) {
       setError((err as Error).message);
     } finally {

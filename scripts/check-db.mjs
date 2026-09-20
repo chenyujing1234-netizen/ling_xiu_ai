@@ -17,6 +17,82 @@ const conn = await mysql.createConnection({
   dateStrings: true,
 });
 
+const [[lastPathCol]] = await conn.query(
+  `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
+   WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users' AND COLUMN_NAME = 'last_path'`,
+  [process.env.MYSQL_DATABASE],
+);
+if (!lastPathCol.c) {
+  await conn.query(`ALTER TABLE users ADD COLUMN last_path VARCHAR(512) NULL`);
+  console.log('  · 已添加 users.last_path 列');
+}
+
+const [[fbTable]] = await conn.query(
+  `SELECT COUNT(*) AS c FROM information_schema.TABLES
+   WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'devotion_stage_feedback'`,
+  [process.env.MYSQL_DATABASE],
+);
+if (!fbTable.c) {
+  await conn.query(`
+    CREATE TABLE devotion_stage_feedback (
+      devotion_id INT NOT NULL,
+      stage VARCHAR(16) NOT NULL,
+      content_hash VARCHAR(64) NOT NULL,
+      feedback TEXT NOT NULL,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (devotion_id, stage),
+      CONSTRAINT fk_stage_fb_dev FOREIGN KEY (devotion_id) REFERENCES devotions(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+  console.log('  · 已创建 devotion_stage_feedback 表');
+}
+
+const [[noteReviewTable]] = await conn.query(
+  `SELECT COUNT(*) AS c FROM information_schema.TABLES
+   WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'verse_note_reviews'`,
+  [process.env.MYSQL_DATABASE],
+);
+if (!noteReviewTable.c) {
+  await conn.query(`
+    CREATE TABLE verse_note_reviews (
+      note_id INT NOT NULL PRIMARY KEY,
+      content_hash VARCHAR(64) NOT NULL,
+      review TEXT NOT NULL,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT fk_note_review FOREIGN KEY (note_id) REFERENCES verse_notes(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+  console.log('  · 已创建 verse_note_reviews 表');
+}
+
+for (const [table, col] of [
+  ['verse_note_reviews', 'rag_sources'],
+  ['devotion_stage_feedback', 'rag_sources'],
+  ['coach_messages', 'rag_sources'],
+  ['passage_insights', 'rag_sources'],
+]) {
+  const [[row]] = await conn.query(
+    `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+    [process.env.MYSQL_DATABASE, table, col],
+  );
+  if (!row.c) {
+    await conn.query(`ALTER TABLE ${table} ADD COLUMN ${col} TEXT NULL`);
+    console.log(`  · 已添加 ${table}.${col} 列`);
+  }
+}
+
+for (const col of ['explore_book', 'explore_chapter', 'theme']) {
+  const def = col === 'theme' ? "VARCHAR(32) NOT NULL DEFAULT 'classic'" : 'INT NOT NULL DEFAULT 1';
+  const [[row]] = await conn.query(
+    `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'reading_settings' AND COLUMN_NAME = ?`,
+    [process.env.MYSQL_DATABASE, col],
+  );
+  if (!row.c) {
+    await conn.query(`ALTER TABLE reading_settings ADD COLUMN ${col} ${def}`);
+    console.log(`  · 已添加 reading_settings.${col} 列`);
+  }
+}
+
 let pass = 0;
 let fail = 0;
 const ok = (label, cond, extra = '') => {
@@ -78,6 +154,17 @@ const [[att]] = await conn.query('SELECT `ok` FROM login_attempts WHERE phone = 
 ok('登录成功写入 login_attempts', att?.ok === 1);
 const [[lastLogin]] = await conn.query('SELECT last_login_at FROM users WHERE id = ?', [uid]);
 ok('last_login_at 已更新（NOW() 生效）', Boolean(lastLogin.last_login_at), String(lastLogin.last_login_at));
+const savePath = await api('/api/me/last-path', {
+  method: 'POST',
+  body: JSON.stringify({ path: '/devotion?tab=explore&book=1&chapter=2' }),
+});
+ok('记录最后访问路径', savePath.json?.ok === true, savePath.status);
+const relogin = await api('/api/auth/login', {
+  method: 'POST',
+  headers: { cookie: '' },
+  body: JSON.stringify({ phone: PHONE, password: 'Test123456' }),
+});
+ok('登录返回上次路径', relogin.json?.lastPath === '/devotion?tab=explore&book=1&chapter=2', relogin.json?.lastPath);
 
 const bad = await api('/api/auth/login', {
   method: 'POST',
@@ -153,7 +240,7 @@ const shortInput = await api(`/api/devotion/${devId}/action`, {
   method: 'POST',
   body: JSON.stringify({ action: 'input', kind: 'observation', content: '很短' }),
 });
-ok('字数不够仍然不放行', shortInput.json?.gate?.ok === false, shortInput.json?.gate?.reason);
+ok('有一条观察即可放行', shortInput.json?.gate?.ok === true, shortInput.json?.gate?.reason ?? '通过');
 
 const longText =
   '神在六日之内创造天地万物，每一日都以"神说"开始，以"神看着是好的"结束，第七日安息并定为圣日。';
@@ -161,7 +248,7 @@ const enough = await api(`/api/devotion/${devId}/action`, {
   method: 'POST',
   body: JSON.stringify({ action: 'input', kind: 'observation', content: longText }),
 });
-ok('观察写够字数后放行', enough.json?.gate?.ok === true, enough.json?.gate?.reason ?? '通过');
+ok('多条观察仍放行', enough.json?.gate?.ok === true, enough.json?.gate?.reason ?? '通过');
 ok('输入列表累计两条', enough.json?.inputs?.length === 2, `实际 ${enough.json?.inputs?.length}`);
 
 // 未解锁时不能拿引导 —— 这是产品的核心约束，必须仍然由服务端拦住
@@ -178,6 +265,10 @@ ok('阶段不匹配的输入被拒', wrong.status === 409, `HTTP ${wrong.status}
 // 推进到提问阶段
 const adv = await api(`/api/devotion/${devId}/action`, { method: 'POST', body: JSON.stringify({ action: 'advance' }) });
 ok('可推进到"自己提问"', adv.json?.stage === 'inquire', adv.json?.stage);
+const back = await api(`/api/devotion/${devId}/action`, { method: 'POST', body: JSON.stringify({ action: 'retreat' }) });
+ok('可回到上一步（观察）', back.json?.stage === 'observe', back.json?.stage);
+const fwd = await api(`/api/devotion/${devId}/action`, { method: 'POST', body: JSON.stringify({ action: 'advance' }) });
+ok('再次推进到提问', fwd.json?.stage === 'inquire', fwd.json?.stage);
 const [[stageRow]] = await conn.query('SELECT stage, updated_at FROM devotions WHERE id = ?', [devId]);
 ok('阶段已落库', stageRow?.stage === 'inquire');
 ok('updated_at 被 touch（NOW() 生效）', Boolean(stageRow?.updated_at));
@@ -219,16 +310,18 @@ ok('首页正常渲染', home.status === 200 && home.text.includes('今日读经
 ok('首页显示笔记数', home.text.includes('读经笔记'));
 const mePage = await timed('我的页面', () => api('/me'));
 ok('"我的"页面正常', mePage.status === 200 && mePage.text.includes('自检账号'), `HTTP ${mePage.status}`);
-// 读经已并进灵修页的第一个页签，老地址只剩重定向
+// 读经页已移除，/read 接到灵修流程
 const readPage = await timed('读经老地址', () => api('/read?book=1&chapter=1'));
-ok('/read 跳到灵修页的读经页签',
-  readPage.status === 307 && /\/devotion\?.*tab=read/.test(readPage.headers?.get('location') ?? ''),
+ok('/read 老地址接到灵修流程',
+  readPage.status === 307 && /\/devotion\/start\?book=1&chapter=1/.test(readPage.headers?.get('location') ?? ''),
   `HTTP ${readPage.status} → ${readPage.headers?.get('location') ?? '无 Location'}`);
 const devPage = await timed('灵修页', () => api('/devotion'));
-ok('灵修页正常，且默认就是读经', devPage.status === 200 && devPage.text.includes('长按任意一节'),
+ok('灵修页正常，默认是我的灵修', devPage.status === 200 && devPage.text.includes('开始灵修'),
   `HTTP ${devPage.status}`);
-ok('灵修页三个页签都在',
-  ['读经', '我的灵修', '经文资料'].every((t) => devPage.text.includes(t)));
+ok('灵修页两个页签都在',
+  ['我的灵修', '经文资料'].every((t) => devPage.text.includes(t)) && !devPage.text.includes('>读经<'));
+ok('灵修详情带整章经文（流程里可长按写笔记）', detail.json?.passage?.verses?.length === 31,
+  `${detail.json?.passage?.verses?.length ?? 0} 节`);
 const notesPage = await api('/me/notes');
 ok('笔记页显示刚写的笔记', notesPage.text.includes('神先说话'));
 

@@ -1,6 +1,8 @@
 import { getSession } from '@/lib/auth';
 import { allBooks, getSettings } from '@/lib/bible';
 import SettingsForm from '@/components/SettingsForm';
+import ThemePicker from '@/components/ThemePicker';
+import { normalizeTheme } from '@/lib/themes';
 
 export default async function SettingsPage() {
   const session = await getSession();
@@ -9,8 +11,10 @@ export default async function SettingsPage() {
 
   return (
     <div className="px-4 py-5">
-      <h1 className="mb-1 text-[22px] font-semibold">读经设置</h1>
-      <p className="mb-5 text-sm text-muted">调整每天的读经量，或把进度挪到你想读的地方。</p>
+      <h1 className="page-heading mb-1">读经与外观</h1>
+      <p className="mb-5 text-sm font-medium text-muted">读经计划、界面风格都可以在这里调整。</p>
+      <div className="space-y-5">
+      <ThemePicker initial={normalizeTheme(settings.theme)} />
       <SettingsForm
         books={books}
         initial={{
@@ -19,6 +23,7 @@ export default async function SettingsPage() {
           cursorChapter: settings.cursor_chapter,
         }}
       />
+      </div>
     </div>
   );
 }

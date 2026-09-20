@@ -6,6 +6,8 @@ import { api } from '@/lib/client';
 import KnowledgeGraph, { type GraphData } from './KnowledgeGraph';
 import Mindmap, { type MindmapNode } from './Mindmap';
 import Waiting from './Waiting';
+import RagSourcesFootnote from './RagSourcesFootnote';
+import type { RagSource } from '@/lib/rag-sources';
 
 type Elements = {
   people: { name: string; role: string }[];
@@ -62,6 +64,20 @@ export default function ExploreView({
   useEffect(() => {
     if (bookMeta && chapter > bookMeta.chapters) setChapter(1);
   }, [bookMeta, chapter]);
+
+  // 记住上次浏览位置（下次进入「经文资料」自动恢复）
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      void fetch('/api/me/explore-position', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ bookId: book, chapter }),
+        keepalive: true,
+      });
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, [book, chapter]);
 
   return (
     <div>
@@ -139,10 +155,10 @@ function LazyPanel<T>({
   chapter: number;
   actionLabel: string;
   hint: string;
-  children: (data: T, extra: { unlocked?: boolean; lockedHint?: string }) => React.ReactNode;
+  children: (data: T, extra: { unlocked?: boolean; lockedHint?: string; ragSources?: RagSource[] }) => React.ReactNode;
 }) {
   const [data, setData] = useState<T | null>(null);
-  const [extra, setExtra] = useState<{ unlocked?: boolean; lockedHint?: string }>({});
+  const [extra, setExtra] = useState<{ unlocked?: boolean; lockedHint?: string; ragSources?: RagSource[] }>({});
   const [busy, setBusy] = useState(false);
   const [probing, setProbing] = useState(true);
   const [error, setError] = useState('');
@@ -151,11 +167,11 @@ function LazyPanel<T>({
     setBusy(true);
     setError('');
     try {
-      const res = await api<{ data: T; unlocked?: boolean; lockedHint?: string }>(
+      const res = await api<{ data: T; unlocked?: boolean; lockedHint?: string; ragSources?: RagSource[] }>(
         `/api/insights?kind=${kind}&book=${book}&chapter=${chapter}`,
       );
       setData(res.data);
-      setExtra({ unlocked: res.unlocked, lockedHint: res.lockedHint });
+      setExtra({ unlocked: res.unlocked, lockedHint: res.lockedHint, ragSources: res.ragSources });
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -175,13 +191,13 @@ function LazyPanel<T>({
     setData(null);
     setError('');
     setProbing(true);
-    api<{ data: T | null; unlocked?: boolean; lockedHint?: string }>(
+    api<{ data: T | null; unlocked?: boolean; lockedHint?: string; ragSources?: RagSource[] }>(
       `/api/insights?kind=${kind}&book=${book}&chapter=${chapter}&cacheOnly=1`,
     )
       .then((res) => {
         if (!alive || !res.data) return;
         setData(res.data);
-        setExtra({ unlocked: res.unlocked, lockedHint: res.lockedHint });
+        setExtra({ unlocked: res.unlocked, lockedHint: res.lockedHint, ragSources: res.ragSources });
       })
       .catch(() => {
         /* 探测失败就当没缓存，照常显示生成按钮，不打扰用户 */
@@ -194,7 +210,14 @@ function LazyPanel<T>({
     };
   }, [kind, book, chapter]);
 
-  if (data) return <>{children(data, extra)}</>;
+  if (data) {
+    return (
+      <>
+        {children(data, extra)}
+        <RagSourcesFootnote sources={extra.ragSources} />
+      </>
+    );
+  }
 
   if (probing) {
     return (

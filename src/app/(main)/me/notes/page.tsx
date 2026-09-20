@@ -1,19 +1,7 @@
 import Link from 'next/link';
 import { getSession } from '@/lib/auth';
 import { db } from '@/lib/db';
-
-type Note = {
-  id: number;
-  book_id: number;
-  book_name: string;
-  chapter: number;
-  verse: number;
-  kind: string;
-  content: string;
-  media_path: string | null;
-  god_spoke: number;
-  created_at: string;
-};
+import NotesList, { type NoteItem } from '@/components/NotesList';
 
 export default async function MyNotesPage({
   searchParams,
@@ -32,7 +20,7 @@ export default async function MyNotesPage({
        WHERE n.user_id = ? ${onlySpoke ? 'AND n.god_spoke = 1' : ''}
        ORDER BY n.id DESC LIMIT 200`,
     )
-    .all<Note>(session!.uid);
+    .all<NoteItem>(session!.uid);
 
   return (
     <div className="px-4 py-5">
@@ -58,32 +46,10 @@ export default async function MyNotesPage({
         <p className="card px-4 py-8 text-center text-sm leading-relaxed text-muted">
           还没有笔记。
           <br />
-          在读经页长按任意一节，就能口述或写下想法。
+          在灵修流程的经文里长按任意一节，就能口述或写下想法。
         </p>
       ) : (
-        <ul className="space-y-2.5">
-          {notes.map((n) => (
-            <li key={n.id} className="card px-4 py-3.5">
-              <div className="mb-1.5 flex items-center justify-between">
-                <Link
-                  href={`/devotion?tab=read&book=${n.book_id}&chapter=${n.chapter}`}
-                  className="text-xs font-medium text-brand-500"
-                >
-                  {n.book_name} {n.chapter}:{n.verse}
-                </Link>
-                <span className="text-[11px] text-muted">
-                  {n.god_spoke ? '✦ 神对我说话 · ' : ''}
-                  {n.created_at.slice(5, 16)}
-                </span>
-              </div>
-
-              {n.content && <p className="text-[14px] leading-relaxed">{n.content}</p>}
-              {n.kind === 'audio' && n.media_path && (
-                <audio src={`/api/media/${n.media_path}`} controls className="mt-2 h-9 w-full" />
-              )}
-            </li>
-          ))}
-        </ul>
+        <NotesList notes={notes} />
       )}
     </div>
   );

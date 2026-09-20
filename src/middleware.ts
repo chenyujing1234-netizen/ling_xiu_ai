@@ -1,5 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
+import { sanitizeLastPath } from '@/lib/last-path';
+
+const RESUME_COOKIE = 'lx_resume';
 
 // R-A1：未登录看不到任何界面。这里在边缘层统一拦截，
 // 不依赖前端隐藏，也不依赖每个页面自己判断。
@@ -48,9 +51,9 @@ export async function middleware(req: NextRequest) {
   const isPublicPage = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   const isPublicApi = PUBLIC_APIS.includes(pathname);
 
-  // 已登录访问登录/申请页 → 回首页
+  // 已登录访问登录/申请页 → 回首页（或恢复上次页面）
   if (authed && isPublicPage) {
-    return redirectTo(req, '/');
+    return redirectTo(req, resumeEntry(req) ?? '/');
   }
   if (isPublicPage || isPublicApi) return NextResponse.next();
 
@@ -74,7 +77,22 @@ export async function middleware(req: NextRequest) {
     return redirectTo(req, `${CHANGE_PW_PATH}?first=1`);
   }
 
+  // 已登录再次打开（常见为微信入口固定到 /）：跳到上次停留页
+  if (authed && pathname === '/') {
+    if (req.nextUrl.searchParams.get('home') === '1') {
+      return NextResponse.next();
+    }
+    const resume = resumeEntry(req);
+    if (resume) return redirectTo(req, resume);
+  }
+
   return NextResponse.next();
+}
+
+function resumeEntry(req: NextRequest): string | null {
+  const resume = sanitizeLastPath(req.cookies.get(RESUME_COOKIE)?.value);
+  if (!resume || resume === '/') return null;
+  return resume;
 }
 
 export const config = {

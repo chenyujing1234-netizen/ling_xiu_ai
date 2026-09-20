@@ -25,8 +25,10 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
 
   // 已经生成过就直接回放，不重复消耗额度
   const existing = await db()
-    .prepare(`SELECT content FROM coach_messages WHERE devotion_id = ? AND role='coach' ORDER BY id LIMIT 1`)
-    .get<{ content: string }>(d.id);
+    .prepare(
+      `SELECT content, rag_sources FROM coach_messages WHERE devotion_id = ? AND role='coach' ORDER BY id LIMIT 1`,
+    )
+    .get<{ content: string; rag_sources: string | null }>(d.id);
 
   const encoder = new TextEncoder();
   const send = (obj: unknown) => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
@@ -35,13 +37,19 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     async start(controller) {
       try {
         if (existing) {
+          const { parseRagSources } = await import('@/lib/rag-sources');
           controller.enqueue(send({ type: 'delta', text: existing.content }));
-          controller.enqueue(send({ type: 'done', cached: true }));
+          controller.enqueue(
+            send({
+              type: 'done',
+              cached: true,
+              ragSources: parseRagSources(existing.rag_sources),
+            }),
+          );
           return;
         }
         for await (const event of streamGuidance(d)) {
-          // done 事件不重复回传全文，前端已经逐段拼好了
-          controller.enqueue(send(event.type === 'done' ? { type: 'done' } : event));
+          controller.enqueue(send(event));
         }
         if (d.stage === 'reflect') await setStage(d.id, 'guided');
       } catch (err) {

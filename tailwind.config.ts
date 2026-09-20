@@ -1,32 +1,34 @@
 import type { Config } from 'tailwindcss';
 
+/** 主题 CSS 变量为 R G B 通道，才能用 bg-ink/35 这类透明度 */
+const cv = (name: string) => `rgb(var(${name}) / <alpha-value>)`;
+
 export default {
   content: ['./src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        // 羊皮纸 + 墨色，长时间阅读不刺眼
-        paper: '#fbf8f1',
-        card: '#ffffff',
-        ink: '#2c2620',
-        muted: '#8a8078',
-        line: '#e8e0d4',
+        paper: cv('--tw-paper'),
+        card: cv('--tw-card'),
+        ink: cv('--tw-ink'),
+        muted: cv('--tw-muted'),
+        line: cv('--tw-line'),
         brand: {
-          50: '#f5f2ea',
-          100: '#e6dfcd',
-          300: '#c2ab7f',
-          500: '#8a6d3b',
-          600: '#755c31',
-          700: '#5c4826',
+          50: cv('--tw-brand-50'),
+          100: cv('--tw-brand-100'),
+          300: cv('--tw-brand-300'),
+          500: cv('--tw-brand-500'),
+          600: cv('--tw-brand-600'),
+          700: cv('--tw-brand-700'),
         },
-        accent: '#9c5b3f',
+        accent: cv('--tw-accent'),
       },
       fontFamily: {
         serifcn: ['Songti SC', 'STSong', 'Source Han Serif SC', 'Noto Serif SC', 'serif'],
       },
       boxShadow: {
-        sheet: '0 -8px 32px rgba(44, 38, 32, 0.16)',
-        soft: '0 1px 3px rgba(44, 38, 32, 0.06), 0 8px 24px rgba(44, 38, 32, 0.04)',
+        sheet: 'var(--tw-shadow-sheet)',
+        soft: 'var(--tw-shadow-soft)',
       },
     },
   },

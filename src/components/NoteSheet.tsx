@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/client';
 import { joinDictation, transcribe } from '@/lib/dictate';
 import Recorder from './Recorder';
+import NoteReviewBlock from './NoteReviewBlock';
 
 export type VerseTarget = {
   bookId: number;
@@ -14,28 +15,20 @@ export type VerseTarget = {
   en: string;
 };
 
-type Tab = 'text' | 'audio' | 'context';
+type Tab = 'text' | 'audio';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'text', label: '写下' },
   { key: 'audio', label: '口述' },
-  { key: 'context', label: '上下文' },
 ];
 
-/**
- * 记住上次用的输入方式。
- *
- * 习惯录音的人几乎每次都录音，每打开一节都要先点一下"录音"很啰嗦，
- * 所以直接停在上次用的那种，需要换随时点上面的页签。
- * "上下文"是查看不是输入，不计入偏好。
- */
+/** 记住上次用的输入方式（写下 / 口述） */
 const PREF_KEY = 'lx_note_input';
-const INPUT_TABS: Tab[] = ['text', 'audio'];
 
 function lastUsedInput(): Tab {
   if (typeof window === 'undefined') return 'text';
   const v = window.localStorage.getItem(PREF_KEY) as Tab | null;
-  return v && INPUT_TABS.includes(v) ? v : 'text';
+  return v === 'text' || v === 'audio' ? v : 'text';
 }
 
 /** 改一条已记下的笔记时传进来 */
@@ -79,7 +72,6 @@ export default function NoteSheet({
 
   function pickTab(t: Tab) {
     setTab(t);
-    if (!INPUT_TABS.includes(t)) return;
     try {
       window.localStorage.setItem(PREF_KEY, t);
     } catch {
@@ -234,6 +226,16 @@ export default function NoteSheet({
               <button className="btn-primary w-full py-3" onClick={saveText} disabled={busy}>
                 {busy ? '保存中…' : editing ? '改好了' : '保存笔记'}
               </button>
+              {editing && text.trim() && (
+                <NoteReviewBlock
+                  noteId={editing.id}
+                  refLabel={ref}
+                  disabled={text.trim() !== editing.content.trim() || busy}
+                />
+              )}
+              {editing && text.trim() !== editing.content.trim() && (
+                <p className="text-center text-[11px] text-muted">改完先点「改好了」，再请同行者点评</p>
+              )}
               {editing && (
                 <button
                   className="w-full py-2 text-sm text-accent active:opacity-60"
@@ -249,150 +251,18 @@ export default function NoteSheet({
           {tab === 'audio' && (
             <div className="space-y-1">
               <Recorder
+                autoStart
                 busy={transcribing}
                 onDone={speakToText}
-                note={editing ? '松开即接到这条笔记后面' : '松开即转成文字直接记下，想改就点开这条笔记'}
+                note={editing ? '说完点结束，接到这条笔记后面' : '说完点结束，转成文字直接记下，想改就点开这条笔记'}
               />
               {/* 口述说完就直接入库，不再经过"写下"，这个勾选得在开口前就够得着 */}
               <div className="px-1 pb-2">{godSpokeBox}</div>
             </div>
           )}
 
-          {tab === 'context' && <ContextPanel target={target} />}
         </div>
       </div>
     </>
-  );
-}
-
-// ---------- 上下文透视（R-B4） ----------
-
-type ContextData = {
-  target: { cn: string; en: string };
-  before: { chapter: number; verse: number; cn: string }[];
-  after: { chapter: number; verse: number; cn: string }[];
-};
-
-type AiContext = {
-  before_effect: string;
-  after_effect: string;
-  hinge: string;
-  misread: string;
-  cn_en: string;
-};
-
-function ContextPanel({ target }: { target: VerseTarget }) {
-  const [data, setData] = useState<ContextData | null>(null);
-  const [ai, setAi] = useState<AiContext | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [aiBusy, setAiBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    api<ContextData>(
-      `/api/bible/context?book=${target.bookId}&chapter=${target.chapter}&verse=${target.verse}`,
-    )
-      .then(setData)
-      .catch((e) => setError((e as Error).message))
-      .finally(() => setLoading(false));
-  }, [target]);
-
-  // 这一节的深读若已经生成过，重新打开时直接取回来（cacheOnly 不会触发 AI）
-  useEffect(() => {
-    let alive = true;
-    setAi(null);
-    api<{ data: AiContext | null }>(
-      `/api/insights?kind=context&book=${target.bookId}&chapter=${target.chapter}&verse=${target.verse}&cacheOnly=1`,
-    )
-      .then((res) => alive && res.data && setAi(res.data))
-      .catch(() => {
-        /* 没有就没有，照常显示按钮 */
-      });
-    return () => {
-      alive = false;
-    };
-  }, [target]);
-
-  async function loadAi() {
-    setAiBusy(true);
-    setError('');
-    try {
-      const res = await api<{ data: AiContext }>(
-        `/api/insights?kind=context&book=${target.bookId}&chapter=${target.chapter}&verse=${target.verse}`,
-      );
-      setAi(res.data);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setAiBusy(false);
-    }
-  }
-
-  if (loading) return <p className="py-8 text-center text-sm text-muted">加载上下文…</p>;
-  if (!data) return <p className="py-8 text-center text-sm text-accent">{error || '加载失败'}</p>;
-
-  const line = (v: { chapter: number; verse: number; cn: string }) => (
-    <p key={`${v.chapter}-${v.verse}`} className="scripture text-[14px] text-muted">
-      <span className="mr-1 text-[11px] text-brand-300">
-        {v.chapter}:{v.verse}
-      </span>
-      {v.cn}
-    </p>
-  );
-
-  return (
-    <div className="space-y-4 pt-4">
-      <section>
-        <p className="label mb-1.5">前 {data.before.length} 节</p>
-        <div className="space-y-1">{data.before.map(line)}</div>
-      </section>
-
-      <section className="rounded-xl border-l-[3px] border-brand-500 bg-brand-50/60 px-3.5 py-3">
-        <p className="label mb-1.5">本节</p>
-        <p className="scripture text-[15px] text-ink">{data.target.cn}</p>
-        {data.target.en && (
-          <p className="mt-2 text-[13px] italic leading-relaxed text-muted">{data.target.en}</p>
-        )}
-      </section>
-
-      <section>
-        <p className="label mb-1.5">后 {data.after.length} 节</p>
-        <div className="space-y-1">{data.after.map(line)}</div>
-      </section>
-
-      {error && <p className="rounded-xl bg-accent/10 px-3.5 py-2.5 text-sm text-accent">{error}</p>}
-
-      {!ai ? (
-        <div className="rounded-xl border border-dashed border-line px-4 py-4 text-center">
-          <p className="mb-3 text-sm leading-relaxed text-muted">
-            先自己看一遍上下文。
-            <br />
-            想过之后，再看前后文如何影响这一节。
-          </p>
-          <button className="btn-ghost" onClick={loadAi} disabled={aiBusy}>
-            {aiBusy ? '分析中…' : '我想过了，看分析'}
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {(
-            [
-              ['前文如何铺垫', ai.before_effect],
-              ['后文如何回应', ai.after_effect],
-              ['本节的功能', ai.hinge],
-              ['常见的断章取义', ai.misread],
-              ['中英对照差异', ai.cn_en],
-            ] as const
-          )
-            .filter(([, v]) => v)
-            .map(([label, value]) => (
-              <div key={label} className="card px-4 py-3">
-                <p className="label mb-1">{label}</p>
-                <p className="text-[14px] leading-relaxed text-ink/90">{value}</p>
-              </div>
-            ))}
-        </div>
-      )}
-    </div>
   );
 }

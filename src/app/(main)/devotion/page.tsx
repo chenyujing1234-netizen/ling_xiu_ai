@@ -1,11 +1,12 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { allBooks, getSettings, refLabel } from '@/lib/bible';
+import { allBooks, explorePosition, getSettings, refLabel } from '@/lib/bible';
 import { db } from '@/lib/db';
 import { STAGE_META, type Stage } from '@/lib/devotion';
 import DevotionHome, { type HomeTab } from '@/components/DevotionHome';
 import ExploreView from '@/components/ExploreView';
-import Reader from '@/components/Reader';
+import { IconCheck, IconFlame, IconPlay, SectionTitle } from '@/components/Ui';
 
 type Row = {
   id: number;
@@ -28,6 +29,13 @@ export default async function DevotionListPage({
   searchParams: Promise<{ tab?: string; book?: string; chapter?: string; devotion?: string }>;
 }) {
   const sp = await searchParams;
+  if (sp.tab === 'read') {
+    if (sp.devotion) redirect(`/devotion/${sp.devotion}`);
+    const q = new URLSearchParams();
+    if (sp.book) q.set('book', sp.book);
+    if (sp.chapter) q.set('chapter', sp.chapter);
+    redirect(sp.book && sp.chapter ? `/devotion/start?${q}` : '/devotion');
+  }
   const session = await getSession();
   const [settings, bookList, rows] = await Promise.all([
     getSettings(session!.uid),
@@ -48,24 +56,13 @@ export default async function DevotionListPage({
   const ongoing = rows.filter((r) => r.stage !== 'done');
   const finished = rows.filter((r) => r.stage === 'done');
 
-  // 没带 tab 就停在读经；带了就认它，认不出的当读经
-  const tab: HomeTab = sp.tab === 'explore' || sp.tab === 'devotion' ? sp.tab : 'read';
-  // 没指定章节就接着他自己的读经进度
-  const book = Number(sp.book) || settings.cursor_book;
-  const chapter = Number(sp.chapter) || settings.cursor_chapter;
+  const tab: HomeTab = sp.tab === 'explore' ? 'explore' : 'devotion';
+  const savedExplore = explorePosition(settings);
+  const book = Number(sp.book) || savedExplore.book;
+  const chapter = Number(sp.chapter) || savedExplore.chapter;
 
   return (
-    <DevotionHome
-      initialTab={tab}
-      read={
-        <Reader
-          initialBook={book}
-          initialChapter={chapter}
-          devotionId={sp.devotion ? Number(sp.devotion) : null}
-        />
-      }
-      explore={<ExploreView books={books} initialBook={book} initialChapter={chapter} />}
-    >
+    <DevotionHome initialTab={tab} explore={<ExploreView books={books} initialBook={book} initialChapter={chapter} />}>
       <div className="px-4 py-5">
       {/* 页签上已经写着"我的灵修"，标题只留给读屏软件，不再占一行 */}
       <header className="mb-5">
@@ -77,20 +74,21 @@ export default async function DevotionListPage({
 
       <Link
         href={`/devotion/start?book=${settings.cursor_book}&chapter=${settings.cursor_chapter}`}
-        className="btn-primary w-full py-3"
+        className="btn-primary w-full gap-2 py-3"
       >
+        <IconPlay size={18} />
         就 {startLabel} 开始灵修
       </Link>
 
       {ongoing.length > 0 && (
         <section className="mt-6">
-          <h2 className="label mb-2">进行中</h2>
+          <SectionTitle icon={<IconFlame size={16} />}>进行中</SectionTitle>
           <ul className="space-y-2">
             {ongoing.map((r) => (
               <li key={r.id}>
                 <Link href={`/devotion/${r.id}`} className="card block px-4 py-3.5 active:bg-brand-50">
                   <div className="flex items-baseline justify-between">
-                    <span className="text-[15px] font-medium">
+                    <span className="text-[15px] font-bold">
                       {r.book_name} {r.chapter}章
                     </span>
                     <span className="chip">{STAGE_META[r.stage]?.title ?? r.stage}</span>
@@ -108,7 +106,7 @@ export default async function DevotionListPage({
       )}
 
       <section className="mt-6">
-        <h2 className="label mb-2">已完成（{finished.length}）</h2>
+        <SectionTitle icon={<IconCheck size={16} />}>已完成（{finished.length}）</SectionTitle>
         {finished.length === 0 ? (
           <p className="card px-4 py-6 text-center text-sm leading-relaxed text-muted">
             还没有完成的灵修。
@@ -121,7 +119,7 @@ export default async function DevotionListPage({
               <li key={r.id}>
                 <Link href={`/devotion/${r.id}`} className="card block px-4 py-3.5 active:bg-brand-50">
                   <div className="flex items-baseline justify-between">
-                    <span className="text-[15px] font-medium">
+                    <span className="text-[15px] font-bold">
                       {r.book_name} {r.chapter}章
                     </span>
                     <span className="text-xs text-brand-500">{r.score} 分</span>

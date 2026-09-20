@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS users (
   church         VARCHAR(100) NULL,
   created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_login_at  DATETIME     NULL,
+  last_path      VARCHAR(512) NULL,   -- 上次退出时的站内路径，下次登录恢复
   UNIQUE KEY uk_users_phone (phone)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -78,6 +79,9 @@ CREATE TABLE IF NOT EXISTS reading_settings (
   daily_chapters INT NOT NULL DEFAULT 4,
   cursor_book    INT NOT NULL DEFAULT 1,
   cursor_chapter INT NOT NULL DEFAULT 1,
+  explore_book   INT NOT NULL DEFAULT 1,
+  explore_chapter INT NOT NULL DEFAULT 1,
+  theme          VARCHAR(32) NOT NULL DEFAULT 'classic',
   bilingual      TINYINT NOT NULL DEFAULT 1,
   CONSTRAINT fk_settings_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -137,6 +141,15 @@ CREATE TABLE IF NOT EXISTS verse_notes (
   CONSTRAINT fk_note_dev FOREIGN KEY (devotion_id) REFERENCES devotions(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS verse_note_reviews (
+  note_id       INT NOT NULL PRIMARY KEY,
+  content_hash  VARCHAR(64) NOT NULL,
+  review        TEXT NOT NULL,
+  rag_sources   TEXT NULL,
+  updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_note_review FOREIGN KEY (note_id) REFERENCES verse_notes(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 用户在各阶段的输入。kind 区分：
 -- observation 观察 | question 自己的提问 | answer 作答 | life_fact 生命实事 | prayer 祷告
 CREATE TABLE IF NOT EXISTS devotion_inputs (
@@ -182,9 +195,21 @@ CREATE TABLE IF NOT EXISTS coach_messages (
   devotion_id INT         NOT NULL,
   role        VARCHAR(10) NOT NULL,   -- user | coach
   content     TEXT        NOT NULL,
+  rag_sources TEXT NULL,
   created_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   KEY idx_coach_dev (devotion_id, id),
   CONSTRAINT fk_coach_dev FOREIGN KEY (devotion_id) REFERENCES devotions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS devotion_stage_feedback (
+  devotion_id   INT NOT NULL,
+  stage         VARCHAR(16) NOT NULL,
+  content_hash  VARCHAR(64) NOT NULL,
+  feedback      TEXT NOT NULL,
+  rag_sources   TEXT NULL,
+  updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (devotion_id, stage),
+  CONSTRAINT fk_stage_fb_dev FOREIGN KEY (devotion_id) REFERENCES devotions(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ========== 结构化洞察缓存（控制 AI 成本，R-C5） ==========
@@ -192,9 +217,10 @@ CREATE TABLE IF NOT EXISTS passage_insights (
   id         INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   ref_key    VARCHAR(40) NOT NULL,   -- 如 "1-3-1-24"
   kind       VARCHAR(20) NOT NULL,   -- elements|context|timeline|graph|mindmap|image
-  payload    LONGTEXT    NOT NULL,   -- JSON 字符串；不用 JSON 类型，免得驱动自动解析
-  model      VARCHAR(60) NULL,
-  created_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  payload     LONGTEXT    NOT NULL,   -- JSON 字符串；不用 JSON 类型，免得驱动自动解析
+  model       VARCHAR(60) NULL,
+  rag_sources TEXT NULL,
+  created_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uk_insight (ref_key, kind)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

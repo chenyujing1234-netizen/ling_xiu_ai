@@ -151,8 +151,25 @@ export type Settings = {
   daily_chapters: number;
   cursor_book: number;
   cursor_chapter: number;
+  explore_book?: number;
+  explore_chapter?: number;
+  theme?: string;
   bilingual: number;
 };
+
+/** 经文资料页上次浏览的经卷章（独立于今日读经游标） */
+export function explorePosition(s: Settings): { book: number; chapter: number } {
+  return {
+    book: s.explore_book ?? s.cursor_book,
+    chapter: s.explore_chapter ?? s.cursor_chapter,
+  };
+}
+
+export async function setExplorePosition(userId: number, bookId: number, chapter: number) {
+  await db()
+    .prepare(`UPDATE reading_settings SET explore_book = ?, explore_chapter = ? WHERE user_id = ?`)
+    .run(bookId, chapter, userId);
+}
 
 export async function getSettings(userId: number): Promise<Settings> {
   const conn = db();

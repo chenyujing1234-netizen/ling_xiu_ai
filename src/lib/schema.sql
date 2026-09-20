@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS users (
   must_change_pw INTEGER NOT NULL DEFAULT 1,      -- 首次登录强制改密
   church        TEXT,
   created_at    TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-  last_login_at TEXT
+  last_login_at TEXT,
+  last_path     TEXT   -- 上次退出时的站内路径
 );
 
 -- 使用申请：用户提交 → 管理员审批 → 管理员线下把密码告诉他
@@ -66,6 +67,9 @@ CREATE TABLE IF NOT EXISTS reading_settings (
   daily_chapters INTEGER NOT NULL DEFAULT 4,
   cursor_book    INTEGER NOT NULL DEFAULT 1,
   cursor_chapter INTEGER NOT NULL DEFAULT 1,
+  explore_book   INTEGER NOT NULL DEFAULT 1,
+  explore_chapter INTEGER NOT NULL DEFAULT 1,
+  theme          TEXT NOT NULL DEFAULT 'classic',
   bilingual      INTEGER NOT NULL DEFAULT 1
 );
 
@@ -100,6 +104,15 @@ CREATE TABLE IF NOT EXISTS verse_notes (
 );
 CREATE INDEX IF NOT EXISTS idx_note_user ON verse_notes(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_note_verse ON verse_notes(user_id, book_id, chapter, verse);
+
+-- 逐节笔记的同行者点评（笔记文字未改则复用）
+CREATE TABLE IF NOT EXISTS verse_note_reviews (
+  note_id       INTEGER PRIMARY KEY REFERENCES verse_notes(id) ON DELETE CASCADE,
+  content_hash  TEXT NOT NULL,
+  review        TEXT NOT NULL,
+  rag_sources   TEXT,
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
 
 -- ========== 灵修会话（七阶段，强制顺序） ==========
 CREATE TABLE IF NOT EXISTS devotions (
@@ -161,18 +174,31 @@ CREATE TABLE IF NOT EXISTS coach_messages (
   devotion_id INTEGER NOT NULL REFERENCES devotions(id) ON DELETE CASCADE,
   role        TEXT NOT NULL,              -- user | coach
   content     TEXT NOT NULL,
+  rag_sources TEXT,
   created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 CREATE INDEX IF NOT EXISTS idx_coach_dev ON coach_messages(devotion_id, id);
 
+-- 各阶段「下一步」同行者短评（内容未改则复用，不重复调 LLM）
+CREATE TABLE IF NOT EXISTS devotion_stage_feedback (
+  devotion_id   INTEGER NOT NULL REFERENCES devotions(id) ON DELETE CASCADE,
+  stage         TEXT NOT NULL,
+  content_hash  TEXT NOT NULL,
+  feedback      TEXT NOT NULL,
+  rag_sources   TEXT,
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  PRIMARY KEY (devotion_id, stage)
+);
+
 -- ========== 结构化洞察缓存（控制 AI 成本，R-C5） ==========
 CREATE TABLE IF NOT EXISTS passage_insights (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  ref_key    TEXT NOT NULL,               -- 如 "1-3-1-24"
-  kind       TEXT NOT NULL,               -- elements|context|timeline|graph|mindmap|image
-  payload    TEXT NOT NULL,               -- JSON
-  model      TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  ref_key     TEXT NOT NULL,               -- 如 "1-3-1-24"
+  kind        TEXT NOT NULL,               -- elements|context|timeline|graph|mindmap|image
+  payload     TEXT NOT NULL,               -- JSON
+  model       TEXT,
+  rag_sources TEXT,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
   UNIQUE(ref_key, kind)
 );
 
