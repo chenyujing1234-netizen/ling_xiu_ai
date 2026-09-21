@@ -27,8 +27,8 @@ export async function GET() {
 }
 
 /**
- * R-A3：审批。通过时由系统生成初始密码并**只在这一次响应里返回明文**，
- * 由管理员通过微信/电话线下转达 —— 系统不发短信、不发邮件。
+ * R-A3：审批。通过时用申请时用户自设的密码开通账号（must_change_pw=0）。
+ * 仅对缺少 password_hash 的旧申请仍生成临时密码并在响应里返回一次明文。
  */
 export async function POST(req: Request) {
   return handler(async () => {
@@ -38,9 +38,14 @@ export async function POST(req: Request) {
 
     const reqRow = await conn
       .prepare(`SELECT * FROM access_requests WHERE id = ?`)
-      .get<{ id: number; phone: string; name: string; church: string | null; status: string }>(
-        payload.id,
-      );
+      .get<{
+        id: number;
+        phone: string;
+        name: string;
+        church: string | null;
+        status: string;
+        password_hash: string | null;
+      }>(payload.id);
     if (!reqRow) bad('申请不存在');
     if (reqRow!.status !== 'pending') bad('该申请已经处理过了');
 
@@ -59,14 +64,17 @@ export async function POST(req: Request) {
       bad('该手机号已经开通过账号了');
     }
 
-    const password = generatePassword(8);
+    const legacy = !reqRow!.password_hash?.trim();
+    const password = legacy ? generatePassword(8) : null;
+    const passwordHash = legacy ? hashPassword(password!) : reqRow!.password_hash!;
+    const mustChange = legacy ? 1 : 0;
     await transaction(async (tx) => {
       const info = await tx
         .prepare(
           `INSERT INTO users (phone, name, password_hash, church, must_change_pw)
-           VALUES (?, ?, ?, ?, 1)`,
+           VALUES (?, ?, ?, ?, ?)`,
         )
-        .run(reqRow!.phone, reqRow!.name, hashPassword(password), reqRow!.church);
+        .run(reqRow!.phone, reqRow!.name, passwordHash, reqRow!.church, mustChange);
       await tx
         .prepare(`INSERT INTO reading_settings (user_id, daily_chapters) VALUES (?, ?)`)
         .run(info.lastInsertRowid, Number(process.env.DAILY_CHAPTERS || 4));
@@ -78,6 +86,11 @@ export async function POST(req: Request) {
         .run(admin.uid, payload.id);
     });
 
-    return { ok: true, phone: reqRow!.phone, name: reqRow!.name, password };
+    return {
+      ok: true,
+      phone: reqRow!.phone,
+      name: reqRow!.name,
+      ...(password ? { password } : {}),
+    };
   });
 }

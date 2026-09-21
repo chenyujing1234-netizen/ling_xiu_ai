@@ -44,6 +44,10 @@ async function readToken(token: string | undefined): Promise<{ mustChangePw?: bo
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // public/ 下的静态图：Image 优化器内网拉原图时不带登录 Cookie，不能走鉴权
+  if (pathname.startsWith('/images/')) return NextResponse.next();
+
   const token = req.cookies.get('lx_session')?.value;
   const payload = await readToken(token);
   const authed = payload !== null;
@@ -97,5 +101,7 @@ function resumeEntry(req: NextRequest): string | null {
 
 export const config = {
   // 排除静态资源与上传的音频
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|uploads/|manifest.webmanifest|icon.svg).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|uploads/|manifest.webmanifest|icon.svg|images/).*)',
+  ],
 };

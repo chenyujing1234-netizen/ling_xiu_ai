@@ -69,7 +69,7 @@ export async function notifyAccessRequest(r: {
     '',
     APP_URL
       ? `去审批：${APP_URL.replace(/\/$/, '')}/admin`
-      : '去后台「管理」页审批：先给他分配一个初始密码，他首次登录后会被要求改掉。',
+      : '去后台「管理」页审批；申请人已在提交时自设登录密码，通过后可直接登录。',
     '',
     '—— 灵修工具',
   ];

@@ -27,11 +27,12 @@ CREATE TABLE IF NOT EXISTS users (
   UNIQUE KEY uk_users_phone (phone)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 使用申请：用户提交 → 管理员审批 → 管理员线下把密码告诉他
+-- 使用申请：用户提交手机号+自设密码 → 管理员审批 → 直接登录
 CREATE TABLE IF NOT EXISTS access_requests (
   id            INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   phone         VARCHAR(20)  NOT NULL,
   name          VARCHAR(50)  NOT NULL,
+  password_hash VARCHAR(200) NULL,   -- 申请时自设密码的哈希；旧数据为空则审批时仍生成临时密码
   church        VARCHAR(100) NULL,
   note          VARCHAR(500) NULL,
   status        VARCHAR(10)  NOT NULL DEFAULT 'pending',   -- pending | approved | rejected

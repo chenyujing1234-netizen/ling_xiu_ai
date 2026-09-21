@@ -48,7 +48,7 @@ export default function LoginForm() {
         className="field"
         type="password"
         autoComplete="current-password"
-        placeholder="密码（由管理员分配）"
+        placeholder="密码"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         required

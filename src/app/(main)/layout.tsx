@@ -3,7 +3,9 @@ import { Suspense } from 'react';
 import BottomTab from '@/components/BottomTab';
 import LastPathTracker from '@/components/LastPathTracker';
 import { getSession } from '@/lib/auth';
+import { countPendingAccessRequests } from '@/lib/admin-pending';
 import { getSettings } from '@/lib/bible';
+import AdminPendingProvider from '@/components/AdminPendingProvider';
 import FontScaleSync from '@/components/FontScaleSync';
 import SubpageBackBar from '@/components/SubpageBackBar';
 import ThemeSync from '@/components/ThemeSync';
@@ -19,9 +21,11 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   const settings = await getSettings(session.uid);
   const theme = normalizeTheme(settings.theme);
   const fontScale = normalizeFontScale(settings.font_scale);
+  const isAdmin = session.role === 'admin';
+  const pendingRequests = isAdmin ? await countPendingAccessRequests() : 0;
 
   return (
-    <>
+    <AdminPendingProvider isAdmin={isAdmin} initialPending={pendingRequests}>
       <ThemeSync theme={theme} />
       <FontScaleSync fontScale={fontScale} />
       <Suspense fallback={null}>
@@ -34,6 +38,6 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         {children}
       </main>
       <BottomTab />
-    </>
+    </AdminPendingProvider>
   );
 }

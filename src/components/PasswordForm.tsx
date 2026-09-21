@@ -23,7 +23,9 @@ export default function PasswordForm() {
     }
     setBusy(true);
     try {
-      await api('/api/auth/password', { json: { current, next } });
+      await api('/api/auth/password', {
+        json: first ? { next } : { current, next },
+      });
       setDone(true);
       setTimeout(() => hardNavigate('/'), 900);
     } catch (err) {
@@ -47,20 +49,22 @@ export default function PasswordForm() {
       <h1 className="text-[22px] font-semibold">{first ? '请先设置你的密码' : '修改密码'}</h1>
       <p className="mb-5 mt-1.5 text-sm leading-relaxed text-muted">
         {first
-          ? '管理员给你的是初始密码。为了安全，请设置一个只有你知道的新密码。'
+          ? '你刚用初始密码登录成功。请在这里设置一个只有你知道的新密码。'
           : '修改后当前设备会继续保持登录。'}
       </p>
 
       <form onSubmit={submit} className="space-y-3">
-        <input
-          className="field"
-          type="password"
-          autoComplete="current-password"
-          placeholder={first ? '管理员给你的初始密码' : '当前密码'}
-          value={current}
-          onChange={(e) => setCurrent(e.target.value)}
-          required
-        />
+        {!first && (
+          <input
+            className="field"
+            type="password"
+            autoComplete="current-password"
+            placeholder="当前密码"
+            value={current}
+            onChange={(e) => setCurrent(e.target.value)}
+            required
+          />
+        )}
         <input
           className="field"
           type="password"
@@ -84,7 +88,7 @@ export default function PasswordForm() {
         {error && <p className="rounded-xl bg-accent/10 px-3.5 py-2.5 text-sm text-accent">{error}</p>}
 
         <button className="btn-primary w-full py-3" disabled={busy}>
-          {busy ? '提交中…' : '确认修改'}
+          {busy ? '提交中…' : first ? '确认设置' : '确认修改'}
         </button>
       </form>
     </>

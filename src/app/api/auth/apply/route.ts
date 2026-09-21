@@ -2,11 +2,13 @@ import { z } from 'zod';
 import { after } from 'next/server';
 import { handler, body, bad } from '@/lib/api';
 import { db } from '@/lib/db';
+import { hashPassword } from '@/lib/auth';
 import { notifyAccessRequest } from '@/lib/mailer';
 
 // R-A2：提交使用申请。不创建账号，只创建一条待审批记录。
 const Schema = z.object({
   phone: z.string().trim().regex(/^1\d{10}$/, '请填写正确的 11 位手机号'),
+  password: z.string().min(6, '登录密码至少 6 位').max(64),
   note: z.string().trim().max(300).optional(),
 });
 
@@ -31,9 +33,9 @@ export async function POST(req: Request) {
 
     await conn
       .prepare(
-        `INSERT INTO access_requests (phone, name, church, note) VALUES (?, ?, ?, ?)`,
+        `INSERT INTO access_requests (phone, name, password_hash, church, note) VALUES (?, ?, ?, ?, ?)`,
       )
-      .run(data.phone, displayName(data.phone), null, data.note ?? null);
+      .run(data.phone, displayName(data.phone), hashPassword(data.password), null, data.note ?? null);
 
     // 邀请制的工具，申请没人看见人就一直进不来，所以落库后立刻通知管理员。
     // 放进 after()：申请人不必等 SMTP 那几秒，发信失败也不该让他以为没提交成功

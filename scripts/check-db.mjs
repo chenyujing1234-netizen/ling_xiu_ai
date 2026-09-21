@@ -101,6 +101,16 @@ for (const [table, col] of [
   }
 }
 
+const [[reqPwCol]] = await conn.query(
+  `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
+   WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'access_requests' AND COLUMN_NAME = 'password_hash'`,
+  [process.env.MYSQL_DATABASE],
+);
+if (!reqPwCol.c) {
+  await conn.query(`ALTER TABLE access_requests ADD COLUMN password_hash VARCHAR(200) NULL`);
+  console.log('  · 已添加 access_requests.password_hash 列');
+}
+
 for (const col of ['explore_book', 'explore_chapter', 'theme', 'font_scale']) {
   const def =
     col === 'theme'

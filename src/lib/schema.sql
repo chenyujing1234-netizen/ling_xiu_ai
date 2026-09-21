@@ -17,11 +17,12 @@ CREATE TABLE IF NOT EXISTS users (
   last_path     TEXT   -- 上次退出时的站内路径
 );
 
--- 使用申请：用户提交 → 管理员审批 → 管理员线下把密码告诉他
+-- 使用申请：用户提交手机号+自设密码 → 管理员审批 → 直接登录
 CREATE TABLE IF NOT EXISTS access_requests (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   phone        TEXT NOT NULL,
   name         TEXT NOT NULL,
+  password_hash TEXT,
   church       TEXT,
   note         TEXT,
   status       TEXT NOT NULL DEFAULT 'pending',   -- pending | approved | rejected

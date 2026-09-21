@@ -6,6 +6,7 @@ import { summaryOf, chapterStatus } from '@/lib/stats';
 import { db } from '@/lib/db';
 import { STAGE_META, type Stage } from '@/lib/devotion';
 import { getResumePath } from '@/lib/resume';
+import PageBanner from '@/components/PageBanner';
 import ThemePickerButton from '@/components/ThemePickerButton';
 import {
   IconBook,
@@ -53,6 +54,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="px-4 py-5">
+      <PageBanner variant="today" priority />
       <header className="mb-5 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-sm text-muted">

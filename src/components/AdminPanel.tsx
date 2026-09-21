@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/client';
+import { useAdminPending } from './AdminPendingProvider';
 
 type Request = {
   id: number;
@@ -81,7 +82,7 @@ export default function AdminPanel({ books }: { books: BookBrief[] }) {
 
       {credential && (
         <div className="card mb-4 border-brand-300 bg-brand-50 px-4 py-4">
-          <p className="label mb-1.5">请把这个密码线下告诉他（只显示这一次）</p>
+          <p className="label mb-1.5">旧版申请无自设密码，请线下告知临时密码（只显示这一次）</p>
           <p className="text-[15px]">
             {credential.name} · {credential.phone}
           </p>
@@ -89,7 +90,7 @@ export default function AdminPanel({ books }: { books: BookBrief[] }) {
             {credential.password}
           </p>
           <p className="text-xs leading-relaxed text-muted">
-            他首次登录后会被要求立即修改密码。关掉这个提示就再也看不到明文了。
+            对方首次登录后会被要求立即修改密码。关掉此提示后无法再查看明文。
           </p>
           <button className="btn-ghost mt-2.5 w-full" onClick={() => setCredential(null)}>
             我已记下，关闭
@@ -115,6 +116,7 @@ function RequestsTab({
 }) {
   const [items, setItems] = useState<Request[] | null>(null);
   const [busy, setBusy] = useState(0);
+  const { refresh: refreshPendingBadge } = useAdminPending();
 
   const load = useCallback(async () => {
     try {
@@ -141,6 +143,7 @@ function RequestsTab({
         onCredential({ name: res.name ?? '', phone: res.phone ?? '', password: res.password });
       }
       await load();
+      await refreshPendingBadge();
     } catch (e) {
       onError((e as Error).message);
     } finally {
@@ -175,7 +178,7 @@ function RequestsTab({
                     disabled={busy === r.id}
                     onClick={() => review(r.id, 'approve')}
                   >
-                    {busy === r.id ? '处理中…' : '通过并分配密码'}
+                    {busy === r.id ? '处理中…' : '通过'}
                   </button>
                   <button
                     className="btn-ghost px-3 py-2 text-accent"

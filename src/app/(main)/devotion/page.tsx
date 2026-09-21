@@ -5,6 +5,7 @@ import { allBooks, explorePosition, getSettings, refLabel } from '@/lib/bible';
 import { db } from '@/lib/db';
 import { STAGE_META, type Stage } from '@/lib/devotion';
 import DevotionHome, { type HomeTab } from '@/components/DevotionHome';
+import PageBanner from '@/components/PageBanner';
 import ExploreView from '@/components/ExploreView';
 import { IconCheck, IconFlame, IconPlay, SectionTitle } from '@/components/Ui';
 
@@ -64,6 +65,7 @@ export default async function DevotionListPage({
   return (
     <DevotionHome initialTab={tab} explore={<ExploreView books={books} initialBook={book} initialChapter={chapter} />}>
       <div className="px-4 py-5">
+      <PageBanner variant="devotion" />
       {/* 页签上已经写着"我的灵修"，标题只留给读屏软件，不再占一行 */}
       <header className="mb-5">
         <h1 className="sr-only">我的灵修</h1>

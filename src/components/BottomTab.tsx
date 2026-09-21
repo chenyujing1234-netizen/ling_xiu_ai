@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAdminPending } from './AdminPendingProvider';
 
 // R-G1：三个底部 Tab。图标用内联 SVG，避免图标库拖慢首屏。
 // 原来的"发现"和"读经"都并进了"灵修"：这个产品没有脱离灵修的读经，
@@ -16,6 +17,7 @@ const TABS = [
 
 export default function BottomTab() {
   const pathname = usePathname();
+  const { pending: adminPending } = useAdminPending();
 
   return (
     <nav
@@ -36,11 +38,17 @@ export default function BottomTab() {
                 {/* 选中态除了换色还垫一个药丸底：brand-500 与 muted 的明度太接近，
                     只靠文字颜色在 10px 字号下分不出来，得有个形状上的差别 */}
                 <span
-                  className={`flex h-7 w-12 items-center justify-center rounded-full transition ${
+                  className={`relative flex h-7 w-12 items-center justify-center rounded-full transition ${
                     active ? 'bg-brand-500 text-white shadow-glow' : ''
                   }`}
                 >
                   <tab.icon className={active ? 'text-white' : 'text-muted'} />
+                  {tab.href === '/me' && adminPending > 0 && (
+                    <span
+                      className="absolute right-1 top-0 h-2.5 w-2.5 rounded-full bg-accent ring-2 ring-card"
+                      aria-hidden
+                    />
+                  )}
                 </span>
                 <span className={`text-[10px] ${active ? 'font-bold text-brand-600' : 'text-muted'}`}>
                   {tab.label}

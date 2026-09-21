@@ -3,8 +3,8 @@ import { getSession } from '@/lib/auth';
 import { summaryOf } from '@/lib/stats';
 import { getSettings, refLabel } from '@/lib/bible';
 import LogoutButton from '@/components/LogoutButton';
+import AdminMeLink from '@/components/AdminMeLink';
 import {
-  IconAdmin,
   IconChevronRight,
   IconFlame,
   IconLock,
@@ -73,20 +73,7 @@ export default async function MePage() {
           </li>
         ))}
 
-        {session!.role === 'admin' && (
-          <li>
-            <Link href="/admin" className="card flex items-center gap-3 px-4 py-3.5 active:bg-brand-50">
-              <IconTile tone="accent">
-                <IconAdmin size={20} />
-              </IconTile>
-              <div className="min-w-0 flex-1">
-                <p className="text-[15px] font-bold text-accent">管理后台</p>
-                <p className="mt-0.5 text-xs font-medium text-muted">审批申请 · 分配密码 · 讲道资源</p>
-              </div>
-              <IconChevronRight className="shrink-0 text-muted" />
-            </Link>
-          </li>
-        )}
+        {session!.role === 'admin' && <AdminMeLink />}
       </ul>
 
       <LogoutButton />

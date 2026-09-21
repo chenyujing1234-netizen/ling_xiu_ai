@@ -1,12 +1,15 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
+import AuthHeroImage from '@/components/AuthHeroImage';
 import LoginForm from '@/components/LoginForm';
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen flex-col justify-center px-7 py-12">
-      <header className="mb-10">
-        <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-500 text-2xl text-white shadow-soft">
+    <div className="page-canvas flex min-h-screen flex-col px-7 pb-12 pt-0">
+      <AuthHeroImage variant="login" />
+      <div className="flex flex-1 flex-col justify-center">
+      <header className="mb-8">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-500 text-xl text-white shadow-soft">
           ✦
         </div>
         <h1 className="text-[26px] font-semibold tracking-tight">晨光</h1>
@@ -23,13 +26,14 @@ export default function LoginPage() {
       </Suspense>
 
       <div className="mt-8 space-y-3 text-center">
-        <p className="text-sm text-muted">本站不开放注册，账号由管理员逐个开通。</p>
+        <p className="text-sm text-muted">仅限受邀使用 · 首次来访请先申请</p>
         <Link
           href="/apply"
           className="inline-block text-sm font-medium text-brand-500 underline-offset-4 hover:underline"
         >
           申请使用 →
         </Link>
+      </div>
       </div>
     </div>
   );

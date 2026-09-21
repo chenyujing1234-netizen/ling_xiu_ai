@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 
 // R-A4：首次登录强制改密，也用于日常改密
 const Schema = z.object({
-  current: z.string().min(1, '请输入当前密码'),
+  current: z.string().optional(),
   next: z.string().min(6, '新密码至少 6 位').max(64),
 });
 
@@ -15,10 +15,15 @@ export async function POST(req: Request) {
     const { current, next } = await body(req, Schema);
 
     const row = (await db()
-      .prepare(`SELECT password_hash, name, role FROM users WHERE id = ?`)
-      .get<{ password_hash: string; name: string; role: string }>(session.uid))!;
+      .prepare(`SELECT password_hash, name, role, must_change_pw FROM users WHERE id = ?`)
+      .get<{ password_hash: string; name: string; role: string; must_change_pw: number }>(session.uid))!;
 
-    if (!verifyPassword(current, row.password_hash)) bad('当前密码不正确');
+    const firstSetup = Boolean(row.must_change_pw) || session.mustChangePw;
+    if (!firstSetup) {
+      const cur = current?.trim() ?? '';
+      if (!cur) bad('请输入当前密码');
+      if (!verifyPassword(cur, row.password_hash)) bad('当前密码不正确');
+    }
     if (verifyPassword(next, row.password_hash)) bad('新密码不能与当前密码相同');
 
     await db()
