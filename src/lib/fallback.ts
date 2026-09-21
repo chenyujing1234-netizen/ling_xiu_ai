@@ -145,21 +145,26 @@ export function fallbackStageFeedback(
       return `${quote}，是你自己的话，这很好。若还觉得浅，回经文找一句最刺你的，再答一次。（离线简评）`;
     case 'guided':
       return clip
-        ? `${quote}，同行者会顺着你的话往下走。进入生命实事时，找一件这周真实发生的事。（离线简评）`
-        : '你已经读完了同行者的回应。进入生命实事时，写一件这周真实发生的事，比写感想更有力。（离线简评）';
+        ? `${quote}，陪读者会顺着你的话往下走。进入生命实事时，找一件这周真实发生的事。（离线简评）`
+        : '你已经读完了陪读者的回应。进入生命实事时，写一件这周真实发生的事，比写感想更有力。（离线简评）';
     case 'life':
       return `${quote}。实事写具体了，祷告才有内容。下一步试着对神说实话，不用漂亮。（离线简评）`;
   }
 }
 
-/** 笔记同行者点评（AI 不可用） */
-export function fallbackNoteReview(ref: string, noteContent: string): string {
-  const clip = noteContent.trim().slice(0, 40);
-  const quote = clip ? `你在「${ref}」旁写到「${clip}${noteContent.length > 40 ? '…' : ''}」` : `你在「${ref}」旁留下了笔记`;
-  const hasQuestion = /[?？]|为什么|为何|怎么|如何|是不是|能不能|吗|呢/.test(noteContent);
-  const base = `${quote}，说明你在让经文碰到自己的心里。不妨再读一遍这节字句，找一句最贴你处境的，对着它诚实祷告。（离线简评）`;
-  if (!hasQuestion) return base;
-  return `${base}
+/** 本章笔记总结（AI 不可用） */
+export function fallbackChapterNotesReview(ref: string, noteCount: number): string {
+  return `你在 ${ref} 写了 ${noteCount} 处笔记，说明经文在跟你说话。试着串起来：整章最抓住你的是哪一条线？最后留一个你自己还答不了的问题。（离线总结）`;
+}
 
-关于你的疑问：我这边暂时连不上完整的同行者服务，没法细答。你可以把疑问留在笔记里，改天再点开「同行者点评」；或带着这个问题再读前后文，看经文本身是否在回应你。（离线提示）`;
+/** 笔记陪读者点评（AI 不可用，仍控制在短句） */
+export function fallbackNoteReview(ref: string, noteContent: string): string {
+  const hasQuestion = /[?？]|为什么|为何|怎么|如何|是不是|能不能|吗|呢/.test(noteContent);
+  if (hasQuestion) {
+    return '你在读也在问，好。关于疑问：先对照前后文，看经文是否在回应你。（离线）';
+  }
+  if (noteContent.trim()) {
+    return '笔记接住了这节经，再读一遍，哪一句最贴你？（离线）';
+  }
+  return `「${ref}」旁留了笔记，写具体一点，陪读者才好回应。（离线）`;
 }

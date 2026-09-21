@@ -131,6 +131,43 @@ export function IconScripture({ className, size = 20 }: IconProps) {
   );
 }
 
+/** 双指 + 虚线：表示「长按」 */
+export function IconLongPress({ className, size = 22 }: IconProps) {
+  return (
+    <svg className={box(size, className)} width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M8 5v8a2 2 0 004 0V9" stroke={stroke} strokeWidth={1.6} strokeLinecap="round" />
+      <path d="M12 5v10a2 2 0 004 0V8" stroke={stroke} strokeWidth={1.6} strokeLinecap="round" />
+      <path d="M8 18h8" stroke={stroke} strokeWidth={1.6} strokeLinecap="round" strokeDasharray="2 3" />
+    </svg>
+  );
+}
+
+/** 该条笔记已有与正文匹配的陪读者点评 */
+export function NoteReviewedBadge({ className }: { className?: string }) {
+  return (
+    <span
+      className={`inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-brand-500 text-white shadow-sm ${className ?? ''}`}
+      role="status"
+      aria-label="陪读者已点评"
+    >
+      <IconCheck size={10} className="text-white" />
+    </span>
+  );
+}
+
+/** 经节末尾：提醒可长按记笔记（仅图标，不参与点击） */
+export function VerseLongPressHint({ className }: { className?: string }) {
+  return (
+    <span
+      className={`pointer-events-none ml-1 inline-flex align-middle opacity-80 ${className ?? ''}`}
+      role="img"
+      aria-label="长按可记笔记"
+    >
+      <IconLongPress size={15} className="text-brand-400" />
+    </span>
+  );
+}
+
 /** 区块小标题：图标 + 加粗字 */
 export function SectionTitle({
   icon,
@@ -158,6 +195,10 @@ export function IconTile({
   tone?: 'brand' | 'muted' | 'accent';
 }) {
   const bg =
-    tone === 'accent' ? 'bg-accent/10 text-accent' : tone === 'muted' ? 'bg-line/80 text-muted' : 'bg-brand-100 text-brand-700';
+    tone === 'accent'
+      ? 'bg-accent/15 text-accent shadow-sm'
+      : tone === 'muted'
+        ? 'bg-line/80 text-muted'
+        : 'bg-gradient-to-br from-brand-100 to-brand-200/90 text-brand-700 shadow-sm';
   return <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${bg}`}>{children}</span>;
 }

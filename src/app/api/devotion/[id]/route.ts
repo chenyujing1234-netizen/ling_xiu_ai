@@ -11,6 +11,8 @@ import {
 } from '@/lib/devotion';
 import { resolveRange } from '@/lib/insights';
 import { db } from '@/lib/db';
+import { chapterNotesReviewStatus } from '@/lib/chapter-notes-review';
+import { attachNoteReviewFlags } from '@/lib/note-review';
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   return handler(async () => {
@@ -66,6 +68,16 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       }),
     );
 
+    const chapterNotesReviewed = await chapterNotesReviewStatus(
+      session.uid,
+      d.book_id,
+      d.chapter,
+      notes as { id: number; verse: number; content: string; god_spoke: number }[],
+    );
+    const notesWithReview = await attachNoteReviewFlags(
+      notes as { id: number; content: string }[],
+    );
+
     return {
       devotion: d,
       stageMeta: STAGE_META,
@@ -81,7 +93,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       prompts,
       scores,
       coach: coachOut,
-      notes,
+      notes: notesWithReview,
+      chapterNotesReviewed,
       gate,
       stageFeedbacks,
       stageFeedbackRagSources,

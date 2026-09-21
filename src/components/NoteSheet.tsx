@@ -32,7 +32,7 @@ function lastUsedInput(): Tab {
 }
 
 /** 改一条已记下的笔记时传进来 */
-export type NoteEdit = { id: number; content: string; godSpoke: boolean };
+export type NoteEdit = { id: number; content: string; godSpoke: boolean; readerReviewed?: boolean };
 
 export default function NoteSheet({
   target,
@@ -231,14 +231,18 @@ export default function NoteSheet({
                   noteId={editing.id}
                   refLabel={ref}
                   disabled={text.trim() !== editing.content.trim() || busy}
+                  readerReviewed={
+                    text.trim() === editing.content.trim() ? editing.readerReviewed : false
+                  }
                 />
               )}
               {editing && text.trim() !== editing.content.trim() && (
-                <p className="text-center text-[11px] text-muted">改完先点「改好了」，再请同行者点评</p>
+                <p className="text-center text-[11px] text-muted">改完先点「改好了」，再请陪读者点评</p>
               )}
               {editing && (
                 <button
-                  className="w-full py-2 text-sm text-accent active:opacity-60"
+                  type="button"
+                  className="btn-danger mt-1 w-full py-2.5 text-sm"
                   onClick={removeNote}
                   disabled={busy}
                 >

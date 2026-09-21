@@ -2,69 +2,81 @@
 
 :root,
 [data-theme='classic'] {
-  --tw-paper: 251 248 241;
+  --tw-paper: 255 249 240;
   --tw-card: 255 255 255;
-  --tw-ink: 44 38 32;
-  --tw-muted: 138 128 120;
-  --tw-line: 232 224 212;
-  --tw-brand-50: 245 242 234;
-  --tw-brand-100: 230 223 205;
-  --tw-brand-300: 194 171 127;
-  --tw-brand-500: 138 109 59;
-  --tw-brand-600: 117 92 49;
-  --tw-brand-700: 92 72 38;
-  --tw-accent: 156 91 63;
-  --tw-shadow-sheet: 0 -8px 32px rgba(44, 38, 32, 0.16);
-  --tw-shadow-soft: 0 1px 3px rgba(44, 38, 32, 0.06), 0 8px 24px rgba(44, 38, 32, 0.04);
+  --tw-ink: 38 32 28;
+  --tw-muted: 130 118 108;
+  --tw-line: 235 220 200;
+  --tw-brand-50: 255 244 228;
+  --tw-brand-100: 255 230 196;
+  --tw-brand-200: 245 205 150;
+  --tw-brand-300: 230 175 95;
+  --tw-brand-400: 210 145 55;
+  --tw-brand-500: 186 118 32;
+  --tw-brand-600: 158 96 24;
+  --tw-brand-700: 122 72 18;
+  --tw-accent: 224 88 58;
+  --tw-shadow-sheet: 0 -12px 40px rgba(38, 32, 28, 0.18);
+  --tw-shadow-soft: 0 1px 2px rgba(186, 118, 32, 0.08), 0 8px 28px rgba(38, 32, 28, 0.07);
+  --tw-shadow-glow: 0 6px 20px rgba(186, 118, 32, 0.32);
 }
 
 [data-theme='sea'] {
-  --tw-paper: 244 247 250;
+  --tw-paper: 240 248 255;
   --tw-card: 255 255 255;
-  --tw-ink: 30 42 51;
-  --tw-muted: 107 125 138;
-  --tw-line: 216 226 234;
-  --tw-brand-50: 238 244 248;
-  --tw-brand-100: 212 228 239;
-  --tw-brand-300: 123 163 192;
-  --tw-brand-500: 61 107 140;
-  --tw-brand-600: 50 90 117;
-  --tw-brand-700: 38 70 89;
-  --tw-accent: 196 92 74;
-  --tw-shadow-sheet: 0 -8px 32px rgba(30, 42, 51, 0.14);
-  --tw-shadow-soft: 0 1px 3px rgba(30, 42, 51, 0.06), 0 8px 24px rgba(30, 42, 51, 0.05);
+  --tw-ink: 22 38 52;
+  --tw-muted: 95 118 138;
+  --tw-line: 205 222 238;
+  --tw-brand-50: 232 244 255;
+  --tw-brand-100: 200 228 255;
+  --tw-brand-200: 150 200 240;
+  --tw-brand-300: 90 165 220;
+  --tw-brand-400: 45 130 195;
+  --tw-brand-500: 22 105 175;
+  --tw-brand-600: 18 88 148;
+  --tw-brand-700: 14 68 115;
+  --tw-accent: 230 85 70;
+  --tw-shadow-sheet: 0 -12px 40px rgba(22, 38, 52, 0.16);
+  --tw-shadow-soft: 0 1px 2px rgba(22, 105, 175, 0.1), 0 8px 28px rgba(22, 38, 52, 0.08);
+  --tw-shadow-glow: 0 6px 20px rgba(22, 105, 175, 0.35);
 }
 
 [data-theme='olive'] {
-  --tw-paper: 246 247 242;
+  --tw-paper: 244 248 236;
   --tw-card: 255 255 255;
-  --tw-ink: 42 47 36;
-  --tw-muted: 122 130 112;
-  --tw-line: 223 227 212;
-  --tw-brand-50: 238 241 232;
-  --tw-brand-100: 221 228 208;
-  --tw-brand-300: 148 166 122;
-  --tw-brand-500: 90 107 74;
-  --tw-brand-600: 74 88 61;
-  --tw-brand-700: 58 69 48;
-  --tw-accent: 139 105 20;
-  --tw-shadow-sheet: 0 -8px 32px rgba(42, 47, 36, 0.14);
-  --tw-shadow-soft: 0 1px 3px rgba(42, 47, 36, 0.06), 0 8px 24px rgba(42, 47, 36, 0.04);
+  --tw-ink: 36 44 30;
+  --tw-muted: 108 122 98;
+  --tw-line: 215 225 198;
+  --tw-brand-50: 236 244 220;
+  --tw-brand-100: 215 232 188;
+  --tw-brand-200: 178 205 138;
+  --tw-brand-300: 130 165 88;
+  --tw-brand-400: 95 135 58;
+  --tw-brand-500: 72 115 42;
+  --tw-brand-600: 58 95 34;
+  --tw-brand-700: 45 74 26;
+  --tw-accent: 200 130 28;
+  --tw-shadow-sheet: 0 -12px 40px rgba(36, 44, 30, 0.16);
+  --tw-shadow-soft: 0 1px 2px rgba(72, 115, 42, 0.1), 0 8px 28px rgba(36, 44, 30, 0.07);
+  --tw-shadow-glow: 0 6px 20px rgba(72, 115, 42, 0.32);
 }
 
 [data-theme='night'] {
-  --tw-paper: 28 27 25;
-  --tw-card: 38 36 34;
-  --tw-ink: 236 230 220;
-  --tw-muted: 154 146 136;
-  --tw-line: 58 56 52;
-  --tw-brand-50: 46 44 40;
-  --tw-brand-100: 61 58 52;
-  --tw-brand-300: 160 136 88;
-  --tw-brand-500: 201 168 108;
-  --tw-brand-600: 212 182 122;
-  --tw-brand-700: 226 201 146;
-  --tw-accent: 212 132 106;
-  --tw-shadow-sheet: 0 -8px 32px rgba(0, 0, 0, 0.45);
-  --tw-shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.25);
+  --tw-paper: 22 21 19;
+  --tw-card: 36 34 32;
+  --tw-ink: 245 240 232;
+  --tw-muted: 168 158 145;
+  --tw-line: 62 58 54;
+  --tw-brand-50: 48 44 38;
+  --tw-brand-100: 68 60 48;
+  --tw-brand-200: 110 92 58;
+  --tw-brand-300: 175 145 88;
+  --tw-brand-400: 210 175 105;
+  --tw-brand-500: 232 195 120;
+  --tw-brand-600: 245 215 150;
+  --tw-brand-700: 255 235 185;
+  --tw-accent: 235 130 100;
+  --tw-shadow-sheet: 0 -12px 40px rgba(0, 0, 0, 0.5);
+  --tw-shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.25), 0 8px 28px rgba(0, 0, 0, 0.35);
+  --tw-shadow-glow: 0 6px 24px rgba(232, 195, 120, 0.25);
 }

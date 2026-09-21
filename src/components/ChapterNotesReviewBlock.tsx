@@ -6,14 +6,16 @@ import { NoteReviewedBadge } from '@/components/Ui';
 import RagSourcesFootnote from './RagSourcesFootnote';
 import type { RagSource } from '@/lib/rag-sources';
 
-function ReviewSheet({
+function SummarySheet({
   refLabel,
   text,
+  noteCount,
   ragSources,
   onClose,
 }: {
   refLabel: string;
   text: string;
+  noteCount: number;
   ragSources?: RagSource[];
   onClose: () => void;
 }) {
@@ -23,8 +25,10 @@ function ReviewSheet({
       <div className="sheet z-[60] max-h-[75vh] overflow-y-auto px-5 pb-6">
         <div className="pt-3">
           <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
-          <p className="text-[15px] font-semibold">陪读者点评</p>
-          <p className="mt-0.5 text-xs text-muted">关于你在 {refLabel} 的笔记</p>
+          <p className="text-[15px] font-semibold">本章笔记总结点评</p>
+          <p className="mt-0.5 text-xs text-muted">
+            {refLabel} · 共 {noteCount} 条文字笔记
+          </p>
         </div>
         <div className="mt-4 rounded-xl bg-brand-50/80 px-4 py-3.5">
           <p className="whitespace-pre-wrap text-[15px] leading-[1.85] text-ink/90">{text}</p>
@@ -38,51 +42,59 @@ function ReviewSheet({
   );
 }
 
-export default function NoteReviewBlock({
-  noteId,
-  refLabel,
-  disabled,
-  compact,
-  readerReviewed,
+export default function ChapterNotesReviewBlock({
+  bookId,
+  chapter,
+  bookName,
+  textNoteCount,
+  chapterReviewed,
 }: {
-  noteId: number;
-  refLabel: string;
-  /** 例如笔记未保存、无文字 */
-  disabled?: boolean;
-  compact?: boolean;
-  /** 服务端：当前正文已有缓存点评 */
-  readerReviewed?: boolean;
+  bookId: number;
+  chapter: number;
+  bookName: string;
+  textNoteCount: number;
+  chapterReviewed?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [review, setReview] = useState<string | null>(null);
+  const [noteCount, setNoteCount] = useState(textNoteCount);
   const [ragSources, setRagSources] = useState<RagSource[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [reviewed, setReviewed] = useState(Boolean(readerReviewed));
+  const [reviewed, setReviewed] = useState(Boolean(chapterReviewed));
+
+  const refLabel = `${bookName} ${chapter}章`;
 
   useEffect(() => {
-    setReviewed(Boolean(readerReviewed));
-  }, [readerReviewed, noteId]);
+    setReviewed(Boolean(chapterReviewed));
+  }, [chapterReviewed, bookId, chapter]);
 
-  async function loadReview() {
+  if (textNoteCount < 1) return null;
+
+  async function loadSummary() {
     setErr('');
     setBusy(true);
     try {
-      let res = await api<{ review: string | null; cached: boolean; ragSources?: RagSource[] }>(
-        `/api/notes/${noteId}/review?cacheOnly=1`,
-        { method: 'POST' },
-      );
+      let res = await api<{
+        review: string | null;
+        cached: boolean;
+        ragSources?: RagSource[];
+        noteCount: number;
+      }>(`/api/notes/chapter-review?book=${bookId}&chapter=${chapter}&cacheOnly=1`, { method: 'POST' });
       if (!res.review?.trim()) {
-        res = await api<{ review: string | null; cached: boolean; ragSources?: RagSource[] }>(
-          `/api/notes/${noteId}/review`,
-          { method: 'POST' },
-        );
+        res = await api<{
+          review: string | null;
+          cached: boolean;
+          ragSources?: RagSource[];
+          noteCount: number;
+        }>(`/api/notes/chapter-review?book=${bookId}&chapter=${chapter}`, { method: 'POST' });
       }
       if (!res.review?.trim()) {
-        setErr('暂时无法生成点评，稍后再试');
+        setErr('暂时无法生成总结，稍后再试');
         return;
       }
       setReview(res.review);
+      setNoteCount(res.noteCount);
       setRagSources(res.ragSources ?? []);
       setReviewed(true);
       setOpen(true);
@@ -95,26 +107,23 @@ export default function NoteReviewBlock({
 
   return (
     <>
-      <div className={`flex items-center gap-1.5 ${compact ? 'mt-1' : 'mt-3'}`}>
-        {reviewed && !disabled && <NoteReviewedBadge />}
+      <div className="mx-4 mb-2 flex items-center gap-1.5">
+        {reviewed && <NoteReviewedBadge />}
         <button
           type="button"
-          disabled={disabled || busy}
-          onClick={loadReview}
-          className={
-            compact
-              ? 'btn-secondary !w-auto self-start px-2.5 py-1 text-[11px]'
-              : 'btn-secondary flex-1 py-2.5'
-          }
+          disabled={busy}
+          onClick={loadSummary}
+          className="btn-secondary flex-1 py-2 text-xs"
         >
-          {busy ? '陪读者在读你的笔记…' : reviewed ? '再看陪读者点评' : '陪读者点评'}
+          {busy ? '陪读者在读本章笔记…' : reviewed ? '再看本章笔记总结' : '本章笔记总结点评'}
         </button>
       </div>
-      {err && <p className="mt-1 text-[11px] text-accent">{err}</p>}
+      {err && <p className="mx-4 mb-2 text-[11px] text-accent">{err}</p>}
       {open && review && (
-        <ReviewSheet
+        <SummarySheet
           refLabel={refLabel}
           text={review}
+          noteCount={noteCount}
           ragSources={ragSources}
           onClose={() => setOpen(false)}
         />

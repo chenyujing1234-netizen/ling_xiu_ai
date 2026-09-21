@@ -47,8 +47,11 @@ export function normalizeTheme(raw: string | null | undefined): ThemeId {
 export const THEME_STORAGE_KEY = 'lx_theme';
 export const THEME_COOKIE = 'lx_theme';
 
-/** 首屏防闪烁：在 React 前写入 data-theme */
-export const THEME_BOOT_SCRIPT = `(function(){try{var m=document.cookie.match(/(?:^|; )lx_theme=([^;]+)/);var t=m&&decodeURIComponent(m[1])||localStorage.getItem('lx_theme')||'classic';if(!/^(classic|sea|olive|night)$/.test(t))t='classic';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`;
+/** 首屏防闪烁：在 React 前写入 data-theme 与 data-font-scale */
+export const UI_BOOT_SCRIPT = `(function(){try{var m=document.cookie.match(/(?:^|; )lx_theme=([^;]+)/);var t=m&&decodeURIComponent(m[1])||localStorage.getItem('lx_theme')||'classic';if(!/^(classic|sea|olive|night)$/.test(t))t='classic';document.documentElement.setAttribute('data-theme',t);var fm=document.cookie.match(/(?:^|; )lx_font_scale=([^;]+)/);var f=fm&&decodeURIComponent(fm[1])||localStorage.getItem('lx_font_scale')||'standard';if(!/^(small|standard|large|xlarge)$/.test(f))f='standard';document.documentElement.setAttribute('data-font-scale',f);}catch(e){}})();`;
+
+/** @deprecated 使用 UI_BOOT_SCRIPT */
+export const THEME_BOOT_SCRIPT = UI_BOOT_SCRIPT;
 
 export function applyThemeClient(id: ThemeId) {
   if (typeof document === 'undefined') return;

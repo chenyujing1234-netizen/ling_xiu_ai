@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS reading_settings (
   explore_book   INT NOT NULL DEFAULT 1,
   explore_chapter INT NOT NULL DEFAULT 1,
   theme          VARCHAR(32) NOT NULL DEFAULT 'classic',
+  font_scale     VARCHAR(16) NOT NULL DEFAULT 'standard',
   bilingual      TINYINT NOT NULL DEFAULT 1,
   CONSTRAINT fk_settings_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -148,6 +149,18 @@ CREATE TABLE IF NOT EXISTS verse_note_reviews (
   rag_sources   TEXT NULL,
   updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_note_review FOREIGN KEY (note_id) REFERENCES verse_notes(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS chapter_note_reviews (
+  user_id       INT NOT NULL,
+  book_id       INT NOT NULL,
+  chapter       INT NOT NULL,
+  content_hash  VARCHAR(64) NOT NULL,
+  review        TEXT NOT NULL,
+  rag_sources   TEXT NULL,
+  updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, book_id, chapter),
+  CONSTRAINT fk_chapter_note_review_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 用户在各阶段的输入。kind 区分：

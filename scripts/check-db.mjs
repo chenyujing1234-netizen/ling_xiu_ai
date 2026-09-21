@@ -63,6 +63,27 @@ if (!noteReviewTable.c) {
   console.log('  · 已创建 verse_note_reviews 表');
 }
 
+const [[chapterReviewTable]] = await conn.query(
+  `SELECT COUNT(*) AS c FROM information_schema.TABLES
+   WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'chapter_note_reviews'`,
+  [process.env.MYSQL_DATABASE],
+);
+if (!chapterReviewTable.c) {
+  await conn.query(`
+    CREATE TABLE chapter_note_reviews (
+      user_id INT NOT NULL,
+      book_id INT NOT NULL,
+      chapter INT NOT NULL,
+      content_hash VARCHAR(64) NOT NULL,
+      review TEXT NOT NULL,
+      rag_sources TEXT NULL,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, book_id, chapter),
+      CONSTRAINT fk_chapter_note_review_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+  console.log('  · 已创建 chapter_note_reviews 表');
+}
+
 for (const [table, col] of [
   ['verse_note_reviews', 'rag_sources'],
   ['devotion_stage_feedback', 'rag_sources'],
@@ -80,8 +101,13 @@ for (const [table, col] of [
   }
 }
 
-for (const col of ['explore_book', 'explore_chapter', 'theme']) {
-  const def = col === 'theme' ? "VARCHAR(32) NOT NULL DEFAULT 'classic'" : 'INT NOT NULL DEFAULT 1';
+for (const col of ['explore_book', 'explore_chapter', 'theme', 'font_scale']) {
+  const def =
+    col === 'theme'
+      ? "VARCHAR(32) NOT NULL DEFAULT 'classic'"
+      : col === 'font_scale'
+        ? "VARCHAR(16) NOT NULL DEFAULT 'standard'"
+        : 'INT NOT NULL DEFAULT 1';
   const [[row]] = await conn.query(
     `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'reading_settings' AND COLUMN_NAME = ?`,

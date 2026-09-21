@@ -5,10 +5,12 @@ import Link from 'next/link';
 import { api, hardNavigate } from '@/lib/client';
 import BookPicker, { type BookBrief } from './BookPicker';
 import { useAutoSaveDevotionText } from './useAutoSaveDevotionText';
-import { IconScripture } from '@/components/Ui';
+import { IconLongPress, IconScripture, NoteReviewedBadge, VerseLongPressHint } from '@/components/Ui';
 import { joinDictation } from '@/lib/dictate';
 import Dictate from './Dictate';
 import NoteSheet, { type NoteEdit, type VerseTarget } from './NoteSheet';
+import PageBackButton from './PageBackButton';
+import ChapterNotesReviewBlock from './ChapterNotesReviewBlock';
 import NoteReviewBlock from './NoteReviewBlock';
 import Waiting from './Waiting';
 import RagSourcesFootnote from './RagSourcesFootnote';
@@ -43,7 +45,15 @@ type Prompt = { id: number; layer: string; bridge: string | null; question: stri
 type Score = { dimension: string; score: number; reason: string };
 type CoachMsg = { role: string; content: string; ragSources?: RagSource[] };
 type Verse = { verse: number; cn: string; en: string };
-type Note = { id: number; verse: number; kind: string; content: string; media_path: string | null; god_spoke: number };
+type Note = {
+  id: number;
+  verse: number;
+  kind: string;
+  content: string;
+  media_path: string | null;
+  god_spoke: number;
+  readerReviewed?: boolean;
+};
 
 type FeedbackStageKey = 'observe' | 'inquire' | 'reflect' | 'guided' | 'life';
 
@@ -56,6 +66,7 @@ type Detail = {
   scores: Score[];
   coach: CoachMsg[];
   notes: Note[];
+  chapterNotesReviewed?: boolean;
   gate: { ok: boolean; reason?: string };
   stageFeedbacks?: Partial<Record<FeedbackStageKey, string>>;
   stageFeedbackRagSources?: Partial<Record<FeedbackStageKey, RagSource[]>>;
@@ -238,12 +249,13 @@ export default function DevotionFlow({ id }: { id: number }) {
 
       <header className="sticky top-0 z-30 border-b border-line bg-paper/95 px-4 py-3 backdrop-blur">
         <div className="flex items-center gap-2">
+          <PageBackButton fallback="/devotion" />
           {stage !== 'observe' && (
             <button
               type="button"
               disabled={busy}
               onClick={() => act({ action: 'retreat' })}
-              className="shrink-0 rounded-lg px-2 py-1 text-sm font-medium text-brand-600 active:bg-brand-50 disabled:opacity-50"
+              className="btn-ghost shrink-0 px-3 py-2 text-sm"
             >
               ← 上一步
             </button>
@@ -252,7 +264,7 @@ export default function DevotionFlow({ id }: { id: number }) {
             type="button"
             disabled={busy}
             onClick={openChapterPicker}
-            className="flex min-w-0 flex-1 items-center gap-1 text-left active:opacity-70 disabled:opacity-50"
+            className="btn-ghost flex min-w-0 flex-1 items-center gap-1 px-3 py-2 text-left"
             aria-label="更换经卷章节"
           >
             <span className="truncate text-[17px] font-bold leading-snug">{d.passage.label}</span>
@@ -339,11 +351,15 @@ function Stepper({ current, stage }: { current: number; stage: Stage }) {
         return (
           <li key={s.key} className="flex flex-1 flex-col items-center gap-1">
             <span
-              className={`h-1 w-full rounded-full ${
-                done ? 'bg-brand-500' : active ? 'bg-brand-300' : 'bg-line'
+              className={`h-1.5 w-full rounded-full transition ${
+                done
+                  ? 'bg-brand-500 shadow-[0_0_8px_rgb(var(--tw-brand-500)/0.45)]'
+                  : active
+                    ? 'bg-brand-400 shadow-[0_0_10px_rgb(var(--tw-brand-400)/0.5)]'
+                    : 'bg-line'
               }`}
             />
-            <span className={`text-[10px] ${active ? 'font-medium text-brand-500' : 'text-muted'}`}>
+            <span className={`text-[10px] ${active ? 'font-bold text-brand-600' : done ? 'font-medium text-brand-500' : 'text-muted'}`}>
               {s.label}
             </span>
           </li>
@@ -363,6 +379,7 @@ function Passage({
   verses,
   notes,
   onNotesChange,
+  chapterNotesReviewed,
   emphasis,
   onVerseScroll,
   compactHint,
@@ -373,6 +390,7 @@ function Passage({
   devotionId: number;
   verses: Verse[];
   notes?: Note[];
+  chapterNotesReviewed?: boolean;
   onNotesChange: () => Promise<void>;
   /** 观察阶段经文是主界面，给更高的滚动区 */
   emphasis?: boolean;
@@ -392,6 +410,7 @@ function Passage({
   for (const n of notes ?? []) {
     notesByVerse.set(n.verse, [...(notesByVerse.get(n.verse) ?? []), n]);
   }
+  const textNoteCount = (notes ?? []).filter((n) => n.content?.trim()).length;
 
   function pressStart(v: Verse, e: React.PointerEvent) {
     if (e.pointerType !== 'touch') {
@@ -469,6 +488,13 @@ function Passage({
               </p>
             </div>
           </div>
+          <ChapterNotesReviewBlock
+            bookId={bookId}
+            chapter={chapter}
+            bookName={bookName}
+            textNoteCount={textNoteCount}
+            chapterReviewed={chapterNotesReviewed}
+          />
           <div
             className={`overflow-y-auto px-2 pb-4 no-bar ${
               emphasis
@@ -501,16 +527,20 @@ function Passage({
                     </sup>
                     {v.cn}
                     {verseNotes.length > 0 && (
-                      <span className="ml-1.5 inline-flex align-middle text-[11px] text-accent">
+                      <span className="ml-1.5 inline-flex align-middle items-center gap-1 text-[11px] text-accent">
                         {verseNotes.some((n) => n.kind === 'audio') && '🎙'}
                         {verseNotes.some((n) => n.kind === 'text') && '·'}
+                        {verseNotes.some((n) => n.readerReviewed && n.content?.trim()) && (
+                          <NoteReviewedBadge className="h-3.5 w-3.5" />
+                        )}
                       </span>
                     )}
+                    <VerseLongPressHint />
                   </p>
                   {verseNotes
                     .filter((n) => n.content || n.media_path)
                     .map((n) => (
-                      <div key={n.id} className="mt-1.5 ml-4 rounded-lg bg-brand-50/70 px-3 py-2">
+                      <div key={n.id} className="verse-note">
                         {n.content && (
                           <>
                             <p
@@ -525,9 +555,15 @@ function Passage({
                                   cn: v.cn,
                                   en: v.en ?? '',
                                 });
-                                setEditing({ id: n.id, content: n.content, godSpoke: !!n.god_spoke });
+                                setEditing({
+                                  id: n.id,
+                                  content: n.content,
+                                  godSpoke: !!n.god_spoke,
+                                  readerReviewed: n.readerReviewed,
+                                });
                               }}
-                              className="cursor-pointer text-[13px] leading-relaxed text-brand-700"
+                              className="verse-note-text"
+                              title={n.content.length > 48 ? n.content : undefined}
                             >
                               {n.content}
                             </p>
@@ -536,12 +572,13 @@ function Passage({
                                 noteId={n.id}
                                 refLabel={`${bookName} ${chapter}:${v.verse}`}
                                 compact
+                                readerReviewed={n.readerReviewed}
                               />
                             </div>
                           </>
                         )}
                         {n.kind === 'audio' && n.media_path && (
-                          <audio src={`/api/media/${n.media_path}`} controls className="mt-1 h-8 w-full" />
+                          <audio src={`/api/media/${n.media_path}`} controls className="verse-note-audio w-full" />
                         )}
                       </div>
                     ))}
@@ -570,23 +607,6 @@ function Passage({
 
 function passageBookName(label: string) {
   return label.replace(/\s+\d+:.*$/, '');
-}
-
-function IconLongPress({ className }: { className?: string }) {
-  return (
-    <svg
-      className={`h-[22px] w-[22px] ${className ?? ''}`}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      aria-hidden
-    >
-      <path d="M8 5v8a2 2 0 004 0V9" strokeLinecap="round" />
-      <path d="M12 5v10a2 2 0 004 0V8" strokeLinecap="round" />
-      <path d="M8 18h8" strokeLinecap="round" strokeDasharray="2 3" />
-    </svg>
-  );
 }
 
 /** 阶段说明卡：每一步先说清"这一步要你做什么" */
@@ -620,6 +640,7 @@ function DevotionPassage({
       devotionId={d.devotion.id}
       verses={d.passage.verses}
       notes={d.notes}
+      chapterNotesReviewed={d.chapterNotesReviewed}
       onNotesChange={reload}
       emphasis={emphasis}
       compactHint={readingCompact}
@@ -676,10 +697,10 @@ function SavedStageFeedbackButton({
   return (
     <button
       type="button"
-      className="btn-ghost mb-2 w-full py-2.5 text-sm"
+      className="btn-secondary mb-2 py-2.5 text-sm"
       onClick={() => onView(stage)}
     >
-      查看同行者对「{FEEDBACK_STAGE_TITLE[stage]}」的点评
+      查看陪读者对「{FEEDBACK_STAGE_TITLE[stage]}」的点评
     </button>
   );
 }
@@ -707,7 +728,7 @@ function NextButton({
         <SavedStageFeedbackButton stage={feedbackStage} feedback={savedFeedback} onView={onViewSavedFeedback} />
       )}
       <button className="btn-primary w-full py-3" onClick={onNext} disabled={busy || !gate.ok}>
-        {busy ? '同行者在读你写的内容…' : label}
+        {busy ? '陪读者在读你写的内容…' : label}
       </button>
       {!gate.ok && gate.reason && (
         <p className="mt-2 text-center text-xs text-muted">{gate.reason}</p>
@@ -765,7 +786,10 @@ function AnswerZone({
   children: React.ReactNode;
 }) {
   return (
-    <section ref={zoneRef} className="scroll-mt-28 rounded-xl border border-dashed border-brand-300/90 bg-paper px-3 py-3">
+    <section
+      ref={zoneRef}
+      className="scroll-mt-28 rounded-xl border border-dashed border-brand-300/80 bg-gradient-to-b from-brand-50/90 to-card px-3 py-3 shadow-sm"
+    >
       <p className="mb-2.5 flex items-center gap-1.5 text-xs font-bold text-brand-700">
         <span className="h-1.5 w-1.5 rounded-full bg-brand-500" aria-hidden />
         {title}
@@ -775,7 +799,7 @@ function AnswerZone({
   );
 }
 
-/** 点「下一步」后，同行者对刚写内容的短评 */
+/** 点「下一步」后，陪读者对刚写内容的短评 */
 function StageFeedbackSheet({
   from,
   text,
@@ -793,7 +817,7 @@ function StageFeedbackSheet({
       <div className="sheet z-50 max-h-[70vh] overflow-y-auto px-5 pb-6">
         <div className="pt-3">
           <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
-          <p className="text-[15px] font-semibold">同行者点评</p>
+          <p className="text-[15px] font-semibold">陪读者点评</p>
           <p className="mt-0.5 text-xs text-muted">关于你刚完成的「{from}」</p>
         </div>
         <div className="mt-4 rounded-xl bg-brand-50/80 px-4 py-3.5">
@@ -859,7 +883,8 @@ function ObserveStage({ d, act, sync, busy, reload, onViewSavedFeedback }: Stage
               <li key={i.id} className="card flex items-start gap-2 px-4 py-3">
                 <p className="flex-1 text-[14px] leading-relaxed">{i.content}</p>
                 <button
-                  className="text-xs text-muted"
+                  type="button"
+                  className="btn-ghost shrink-0 px-2 py-1 text-xs"
                   onClick={() => act({ action: 'removeInput', inputId: i.id })}
                 >
                   删除
@@ -888,7 +913,7 @@ function ObserveStage({ d, act, sync, busy, reload, onViewSavedFeedback }: Stage
           {!nudges ? (
             <button
               type="button"
-              className="text-sm text-brand-500 underline-offset-4 hover:underline"
+              className="btn-secondary py-2.5 text-sm"
               onClick={askForHelp}
               disabled={nudgeBusy}
             >
@@ -973,7 +998,11 @@ function InquireStage({ d, act, sync, busy, reload, onViewSavedFeedback }: Stage
               <li key={q.id} className="card flex items-start gap-2 px-4 py-3">
                 <span className="mt-0.5 text-xs text-brand-300">{n + 1}</span>
                 <p className="flex-1 text-[14px] leading-relaxed">{q.content}</p>
-                <button className="text-xs text-muted" onClick={() => act({ action: 'removeInput', inputId: q.id })}>
+                <button
+                  type="button"
+                  className="btn-ghost shrink-0 px-2 py-1 text-xs"
+                  onClick={() => act({ action: 'removeInput', inputId: q.id })}
+                >
                   删除
                 </button>
               </li>
@@ -1066,7 +1095,7 @@ function ReflectAnswerField({
         />
         <div className="mt-2 flex items-center gap-2">
           {saved && (
-            <button type="button" className="text-xs text-muted" onClick={onRemove}>
+            <button type="button" className="btn-ghost px-2.5 py-1.5 text-xs" onClick={onRemove}>
               清空重答
             </button>
           )}
@@ -1199,7 +1228,7 @@ function ReflectStage({ d, act, sync, busy, reload, onViewSavedFeedback }: Stage
               onView={onViewSavedFeedback}
             />
             <button className="btn-primary w-full py-3" onClick={() => act({ action: 'advance' })} disabled={busy}>
-              {busy ? '同行者在读你写的内容…' : '已解锁 · 进入引导'}
+              {busy ? '陪读者在读你写的内容…' : '已解锁 · 进入引导'}
             </button>
           </div>
         )}
@@ -1374,7 +1403,7 @@ function GuidedStage({ d, act, busy, reload, onViewSavedFeedback }: StageProps) 
 
   return (
     <div>
-      <StageIntro title="同行者的回应" compact={readingCompact}>
+      <StageIntro title="陪读者的回应" compact={readingCompact}>
         接下来的话是顺着你写的内容说的，不是标准答案。
         如果你不同意，就直接说出来 —— 那正是你自己在思考的证据。
       </StageIntro>
@@ -1394,13 +1423,13 @@ function GuidedStage({ d, act, busy, reload, onViewSavedFeedback }: StageProps) 
       )}
 
       {phase === 'thinking' && !streaming && (
-        <Waiting text="同行者正在读你写下的每一句…" expect="它在默想，通常 30-90 秒开始回应" />
+        <Waiting text="陪读者正在读你写下的每一句…" expect="它在默想，通常 30-90 秒开始回应" />
       )}
 
       {/* 流式文本：还没落库前先显示这一份 */}
       {streaming && !coachMsgs.length && (
         <div className="card px-4 py-3.5">
-          <p className="label mb-1.5">同行者</p>
+          <p className="label mb-1.5">陪读者</p>
           <div className="space-y-2">
             {streaming.split('\n').filter(Boolean).map((para, k) => (
               <p key={k} className="text-[14.5px] leading-[1.85] text-ink/90">
@@ -1425,7 +1454,7 @@ function GuidedStage({ d, act, busy, reload, onViewSavedFeedback }: StageProps) 
                 : 'ml-8 rounded-2xl bg-brand-500 px-4 py-3 text-white'
             }
           >
-            {m.role === 'coach' && <p className="label mb-1.5">同行者</p>}
+            {m.role === 'coach' && <p className="label mb-1.5">陪读者</p>}
             <div className="space-y-2">
               {m.content.split('\n').filter(Boolean).map((para, k) => (
                 <p key={k} className={`text-[14.5px] leading-[1.85] ${m.role === 'coach' ? 'text-ink/90' : ''}`}>
@@ -1443,7 +1472,7 @@ function GuidedStage({ d, act, busy, reload, onViewSavedFeedback }: StageProps) 
           <>
             <textarea
               className="field min-h-[86px] resize-none"
-              placeholder="考一考：同行者哪一点触动了你？写一句回应或你的不同意…"
+              placeholder="考一考：陪读者哪一点触动了你？写一句回应或你的不同意…"
               value={text}
               onChange={(e) => setText(e.target.value)}
               onBlur={() => {
@@ -1460,7 +1489,7 @@ function GuidedStage({ d, act, busy, reload, onViewSavedFeedback }: StageProps) 
               <div className="flex flex-wrap items-center gap-2">
                 <Dictate onText={(t) => setText((prev) => joinDictation(prev, t))} disabled={busy || coachSending} />
                 <p className="flex-1 text-xs text-muted">
-                  {coachSending || busy ? '同行者在回应…' : '停笔后会自动发送并继续对话'}
+                  {coachSending || busy ? '陪读者在回应…' : '停笔后会自动发送并继续对话'}
                 </p>
                 <button
                   className="btn-primary shrink-0 px-4"
@@ -1474,7 +1503,7 @@ function GuidedStage({ d, act, busy, reload, onViewSavedFeedback }: StageProps) 
           </>
         ) : (
           <p className="py-2 text-sm leading-relaxed text-muted">
-            同行者的回应出来以后，在这里考一考自己、写下你的回应。
+            陪读者的回应出来以后，在这里考一考自己、写下你的回应。
           </p>
         )}
       </AnswerZone>
@@ -1519,7 +1548,11 @@ function LifeStage({ d, act, sync, busy, reload, onViewSavedFeedback }: StagePro
             {archived.map((f) => (
               <li key={f.id} className="card flex items-start gap-2 px-4 py-3">
                 <p className="flex-1 text-[14px] leading-relaxed">{f.content}</p>
-                <button className="text-xs text-muted" onClick={() => act({ action: 'removeInput', inputId: f.id })}>
+                <button
+                  type="button"
+                  className="btn-ghost shrink-0 px-2 py-1 text-xs"
+                  onClick={() => act({ action: 'removeInput', inputId: f.id })}
+                >
                   删除
                 </button>
               </li>
@@ -1606,7 +1639,8 @@ function PrayerStage({ d, act, sync, busy, reload, onViewSavedFeedback: _onViewS
               <li key={p.id} className="card px-4 py-3">
                 <p className="scripture text-[14.5px]">{p.content}</p>
                 <button
-                  className="mt-1.5 text-xs text-muted"
+                  type="button"
+                  className="btn-ghost mt-2 px-2 py-1 text-xs"
                   onClick={() => act({ action: 'removeInput', inputId: p.id })}
                 >
                   删除
@@ -1677,7 +1711,7 @@ function DoneStage({ d }: { d: Detail }) {
 
         {d.coach.filter((m) => m.role === 'coach').length > 0 && (
           <section className="card px-4 py-3.5">
-            <p className="label mb-2">同行者说过的话</p>
+            <p className="label mb-2">陪读者说过的话</p>
             {d.coach
               .filter((m) => m.role === 'coach')
               .map((m, i) => (

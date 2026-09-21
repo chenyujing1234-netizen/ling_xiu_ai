@@ -53,7 +53,7 @@ export default function Dictate({
           setOpen(true);
         }}
         disabled={disabled}
-        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-xs text-muted active:opacity-60 disabled:opacity-50"
+        className="btn-ghost shrink-0 px-2.5 py-1.5 text-xs"
       >
         <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
           <rect x="9" y="3" width="6" height="11" rx="3" />

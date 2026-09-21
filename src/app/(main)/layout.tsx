@@ -4,8 +4,11 @@ import BottomTab from '@/components/BottomTab';
 import LastPathTracker from '@/components/LastPathTracker';
 import { getSession } from '@/lib/auth';
 import { getSettings } from '@/lib/bible';
-import { normalizeTheme } from '@/lib/themes';
+import FontScaleSync from '@/components/FontScaleSync';
+import SubpageBackBar from '@/components/SubpageBackBar';
 import ThemeSync from '@/components/ThemeSync';
+import { normalizeFontScale } from '@/lib/font-scale';
+import { normalizeTheme } from '@/lib/themes';
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -15,14 +18,21 @@ export default async function MainLayout({ children }: { children: React.ReactNo
 
   const settings = await getSettings(session.uid);
   const theme = normalizeTheme(settings.theme);
+  const fontScale = normalizeFontScale(settings.font_scale);
 
   return (
     <>
       <ThemeSync theme={theme} />
+      <FontScaleSync fontScale={fontScale} />
       <Suspense fallback={null}>
         <LastPathTracker />
       </Suspense>
-      <main className="page">{children}</main>
+      <main className="page page-canvas">
+        <Suspense fallback={null}>
+          <SubpageBackBar />
+        </Suspense>
+        {children}
+      </main>
       <BottomTab />
     </>
   );

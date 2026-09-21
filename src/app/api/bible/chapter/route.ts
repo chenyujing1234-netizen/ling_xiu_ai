@@ -2,6 +2,7 @@ import { handler, intParam, notFound } from '@/lib/api';
 import { requireSession } from '@/lib/auth';
 import { getBook, getChapter, allBooks } from '@/lib/bible';
 import { db, today } from '@/lib/db';
+import { attachNoteReviewFlags } from '@/lib/note-review';
 
 export async function GET(req: Request) {
   return handler(async () => {
@@ -48,6 +49,10 @@ export async function GET(req: Request) {
       testament: b.testament,
     }));
 
-    return { book, chapter, verses, notes, resources, books };
+    const notesWithReview = await attachNoteReviewFlags(
+      notes as { id: number; content: string }[],
+    );
+
+    return { book, chapter, verses, notes: notesWithReview, resources, books };
   });
 }

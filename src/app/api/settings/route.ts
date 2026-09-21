@@ -3,6 +3,7 @@ import { handler, body } from '@/lib/api';
 import { requireSession } from '@/lib/auth';
 import { getSettings } from '@/lib/bible';
 import { db } from '@/lib/db';
+import { normalizeFontScale, FONT_SCALE_IDS } from '@/lib/font-scale';
 import { normalizeTheme, THEME_IDS } from '@/lib/themes';
 
 const Schema = z.object({
@@ -11,6 +12,7 @@ const Schema = z.object({
   cursorChapter: z.number().int().min(1).max(150).optional(),
   bilingual: z.boolean().optional(),
   theme: z.enum(THEME_IDS).optional(),
+  fontScale: z.enum(FONT_SCALE_IDS).optional(),
 });
 
 export async function GET() {
@@ -29,7 +31,7 @@ export async function POST(req: Request) {
     await db()
       .prepare(
         `UPDATE reading_settings
-         SET daily_chapters = ?, cursor_book = ?, cursor_chapter = ?, bilingual = ?, theme = ?
+         SET daily_chapters = ?, cursor_book = ?, cursor_chapter = ?, bilingual = ?, theme = ?, font_scale = ?
          WHERE user_id = ?`,
       )
       .run(
@@ -38,6 +40,7 @@ export async function POST(req: Request) {
         d.cursorChapter ?? current.cursor_chapter,
         d.bilingual === undefined ? current.bilingual : d.bilingual ? 1 : 0,
         d.theme ? normalizeTheme(d.theme) : normalizeTheme(current.theme),
+        d.fontScale ? normalizeFontScale(d.fontScale) : normalizeFontScale(current.font_scale),
         session.uid,
       );
 

@@ -6,6 +6,7 @@ import { api } from '@/lib/client';
 import NoteSheet, { type NoteEdit, type VerseTarget } from './NoteSheet';
 import SceneImageBar from './SceneImageBar';
 import BookPicker, { type BookBrief } from './BookPicker';
+import { NoteReviewedBadge, VerseLongPressHint } from './Ui';
 
 type Verse = { book_id: number; chapter: number; verse: number; cn: string; en: string };
 type Note = {
@@ -15,6 +16,7 @@ type Note = {
   content: string;
   media_path: string | null;
   god_spoke: number;
+  readerReviewed?: boolean;
 };
 type Resource = {
   id: number;
@@ -189,7 +191,7 @@ export default function Reader({
       {/* 顶栏。top-11 是给灵修页那排页签让位，z 也要低于它 */}
       <header className="sticky top-11 z-30 border-b border-line bg-paper/95 px-4 py-3 backdrop-blur">
         <div className="flex items-center justify-between gap-2">
-          <button onClick={() => setPicker(true)} className="flex items-center gap-1.5 text-left">
+          <button type="button" onClick={() => setPicker(true)} className="btn-ghost flex items-center gap-1.5 px-3 py-2 text-left">
             <span className="text-[17px] font-semibold">
               {data?.book.name_cn ?? '读经'} {data?.chapter ?? ''}
             </span>
@@ -229,7 +231,7 @@ export default function Reader({
                     ? '再点最后一节；只要这一节就直接生成'
                     : '想换一段，再点一节重新圈'}
               </p>
-              <button onClick={exitPicking} className="shrink-0 text-[11px] text-muted underline">
+              <button type="button" onClick={exitPicking} className="btn-ghost shrink-0 px-2 py-1 text-[11px]">
                 退出选段
               </button>
             </>
@@ -238,10 +240,7 @@ export default function Reader({
               <p className="text-[11px] leading-snug text-muted">
                 长按任意一节 → 口述 / 写下笔记
               </p>
-              <button
-                onClick={() => setPicking(true)}
-                className="shrink-0 rounded-lg border border-line px-2 py-1 text-[11px] text-muted"
-              >
+              <button type="button" onClick={() => setPicking(true)} className="btn-ghost shrink-0 px-2 py-1 text-[11px]">
                 选段配图
               </button>
             </>
@@ -282,11 +281,15 @@ export default function Reader({
                     </sup>
                     {v.cn}
                     {notes.length > 0 && (
-                      <span className="ml-1.5 inline-flex align-middle text-[11px] text-accent">
+                      <span className="ml-1.5 inline-flex align-middle items-center gap-1 text-[11px] text-accent">
                         {notes.some((n) => n.kind === 'audio') && '🎙'}
                         {notes.some((n) => n.kind === 'text') && '·'}
+                        {notes.some((n) => n.readerReviewed && n.content?.trim()) && (
+                          <NoteReviewedBadge className="h-3.5 w-3.5" />
+                        )}
                       </span>
                     )}
+                    {!picking && <VerseLongPressHint />}
                   </p>
                   {bilingual && v.en && (
                     <p className="mt-1 pl-4 text-[13px] leading-relaxed text-muted">{v.en}</p>
@@ -294,7 +297,7 @@ export default function Reader({
                   {notes
                     .filter((n) => n.content || n.media_path)
                     .map((n) => (
-                      <div key={n.id} className="mt-1.5 ml-4 rounded-lg bg-brand-50/70 px-3 py-2">
+                      <div key={n.id} className="verse-note">
                         {n.content && (
                           // 点一下就能改：口述转出的字是直接入库的，听错的地方得改得动。
                           // 拦住指针事件，免得这一下被上层当成"长按这一节"
@@ -311,15 +314,25 @@ export default function Reader({
                                 cn: v.cn,
                                 en: v.en,
                               });
-                              setEditing({ id: n.id, content: n.content, godSpoke: !!n.god_spoke });
+                              setEditing({
+                                id: n.id,
+                                content: n.content,
+                                godSpoke: !!n.god_spoke,
+                                readerReviewed: n.readerReviewed,
+                              });
                             }}
-                            className="cursor-pointer text-[13px] leading-relaxed text-brand-700"
+                            className="verse-note-text"
+                            title={n.content.length > 48 ? n.content : undefined}
                           >
                             {n.content}
                           </p>
                         )}
                         {n.kind === 'audio' && n.media_path && (
-                          <audio src={`/api/media/${n.media_path}`} controls className="mt-1 h-8 w-full" />
+                          <audio
+                            src={`/api/media/${n.media_path}`}
+                            controls
+                            className="verse-note-audio w-full"
+                          />
                         )}
                       </div>
                     ))}

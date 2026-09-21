@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import ThemeProvider from '@/components/ThemeProvider';
-import { THEME_BOOT_SCRIPT } from '@/lib/themes';
+import { UI_BOOT_SCRIPT } from '@/lib/themes';
 
 export const metadata: Metadata = {
   title: '晨光 · 一天里最安静的那段时间',
@@ -21,7 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: UI_BOOT_SCRIPT }} />
       </head>
       <body>
         <ThemeProvider />

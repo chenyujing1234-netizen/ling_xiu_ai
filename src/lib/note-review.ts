@@ -20,8 +20,51 @@ type NoteRow = {
   book_name: string;
 };
 
-function contentHash(content: string): string {
+const NOTE_REVIEW_MAX_CHARS = 50;
+
+/** 笔记点评硬性上限（汉字按码点计） */
+export function clampNoteReviewLength(text: string): string {
+  const t = text.trim();
+  if (!t) return t;
+  const chars = [...t];
+  if (chars.length <= NOTE_REVIEW_MAX_CHARS) return t;
+  return chars.slice(0, NOTE_REVIEW_MAX_CHARS).join('').replace(/[，。；、：]$/, '') + '…';
+}
+
+export function noteContentHash(content: string): string {
   return createHash('sha256').update(content.trim()).digest('hex');
+}
+
+function contentHash(content: string): string {
+  return noteContentHash(content);
+}
+
+export function noteReviewIsCurrent(
+  cached: { content_hash: string; review: string } | null | undefined,
+  content: string,
+): boolean {
+  if (!cached?.review?.trim()) return false;
+  return cached.content_hash === noteContentHash(content);
+}
+
+/** 批量标注笔记是否已有与当前正文匹配的陪读者点评 */
+export async function attachNoteReviewFlags<T extends { id: number; content: string }>(
+  notes: T[],
+): Promise<(T & { readerReviewed: boolean })[]> {
+  if (notes.length === 0) return [];
+  const placeholders = notes.map(() => '?').join(',');
+  const rows = await db()
+    .prepare(
+      `SELECT note_id, content_hash, review FROM verse_note_reviews WHERE note_id IN (${placeholders})`,
+    )
+    .all(...notes.map((n) => n.id));
+  const map = new Map(
+    (rows as { note_id: number; content_hash: string; review: string }[]).map((r) => [r.note_id, r]),
+  );
+  return notes.map((n) => ({
+    ...n,
+    readerReviewed: noteReviewIsCurrent(map.get(n.id), n.content),
+  }));
 }
 
 export async function getCachedNoteReview(
@@ -74,12 +117,16 @@ export async function reviewVerseNote(
 ): Promise<{ review: string | null; cached: boolean; ragSources: RagSource[] }> {
   const note = await loadNote(noteId, userId);
   const text = (note.content ?? '').trim();
-  if (!text) bad('请先写一点文字，同行者才好点评');
+  if (!text) bad('请先写一点文字，陪读者才好点评');
 
   const hash = contentHash(text);
   const cached = await getCachedNoteReview(noteId);
   if (cached?.content_hash === hash && cached.review.trim()) {
-    return { review: cached.review, cached: true, ragSources: parseRagSources(cached.rag_sources) };
+    return {
+      review: clampNoteReviewLength(cached.review),
+      cached: true,
+      ragSources: parseRagSources(cached.rag_sources),
+    };
   }
   if (opts?.cacheOnly) {
     return { review: null, cached: false, ragSources: [] };
@@ -114,7 +161,7 @@ export async function reviewVerseNote(
           }),
         },
       ],
-      { model: MODELS.fast(), maxTokens: 720, temperature: 0.72 },
+      { model: MODELS.fast(), maxTokens: 160, temperature: 0.65 },
     );
   } catch (err) {
     console.warn(`[ai:degraded] 笔记点评: ${(err as Error)?.message ?? String(err)}`);
@@ -122,7 +169,7 @@ export async function reviewVerseNote(
     ragSources = [];
   }
 
-  const trimmed = review.trim();
+  const trimmed = clampNoteReviewLength(review.trim());
   if (trimmed) {
     await saveNoteReview(noteId, hash, trimmed, ragSources);
   }

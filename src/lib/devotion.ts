@@ -30,7 +30,7 @@ export const STAGE_META: Record<Stage, { title: string; hint: string }> = {
   observe: { title: '观察', hint: '先只写你看见的：谁、在哪里、什么时候、做了什么' },
   inquire: { title: '自己提问', hint: '不是回答问题，而是提出你自己的疑问' },
   reflect: { title: '默想作答', hint: '回答这些问题，用你自己的话' },
-  guided: { title: '引导揭晓', hint: '同行者顺着你写的内容，带你往深处走' },
+  guided: { title: '引导揭晓', hint: '陪读者顺着你写的内容，带你往深处走' },
   life: { title: '生命实事', hint: '记下你生命里真实发生的事、看到的现象' },
   prayer: { title: '祷告回应', hint: '把话说回给神，这次灵修才算完整' },
   done: { title: '完成', hint: '归档，可随时回看' },
@@ -424,8 +424,8 @@ export async function stageFeedback(
         .filter((m) => m.role === 'coach')
         .map((m) => m.content)
         .join('\n\n');
-      if (coachText) extra = `同行者说过的话（节选）：\n${coachText.slice(0, 1200)}`;
-      if (!userContent.trim()) userContent = '（引导阶段用户没有追加对话，主要阅读了同行者的回应）';
+      if (coachText) extra = `陪读者说过的话（节选）：\n${coachText.slice(0, 1200)}`;
+      if (!userContent.trim()) userContent = '（引导阶段用户没有追加对话，主要阅读了陪读者的回应）';
       break;
     }
     case 'life':
@@ -572,7 +572,7 @@ export async function scoreDevotion(d: Devotion): Promise<ScoreResult> {
     });
     result = await chatJson(
       [
-        { role: 'system', content: '你是灵修同行者，评估读者的投入质量，只输出 JSON。' },
+        { role: 'system', content: '你是陪读者，评估读者的投入质量，只输出 JSON。' },
         {
           role: 'user',
           content: scorePrompt({
@@ -652,7 +652,7 @@ async function guidanceMessages(d: Devotion) {
     questions: join('question'),
     ragSources: knowledgeCtx.ragSources,
     messages: [
-      { role: 'system' as const, content: '你是灵修同行者。' },
+      { role: 'system' as const, content: '你是陪读者。' },
       {
         role: 'user' as const,
         content: guidePrompt({
@@ -792,7 +792,7 @@ export async function generateNudges(bookId: number, chapter: number, from = 1, 
     const knowledgeCtx = await knowledgeForLlm({ ref: r.label, passage: passageCn });
     const res = await chatJson<{ questions: string[] }>(
       [
-        { role: 'system', content: '你是灵修同行者，只输出 JSON。' },
+        { role: 'system', content: '你是陪读者，只输出 JSON。' },
         {
           role: 'user',
           content: nudgePrompt({

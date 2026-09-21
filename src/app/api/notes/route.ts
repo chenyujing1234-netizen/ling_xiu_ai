@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { handler, body, intParam, bad } from '@/lib/api';
 import { requireSession, HttpError } from '@/lib/auth';
 import { db, today } from '@/lib/db';
+import { attachNoteReviewFlags } from '@/lib/note-review';
 
 const TextNote = z.object({
   bookId: z.number().int().positive(),
@@ -20,27 +21,25 @@ export async function GET(req: Request) {
 
     if (bookId) {
       const chapter = intParam(req, 'chapter');
-      return {
-        notes: await db()
-          .prepare(
-            `SELECT id, book_id, chapter, verse, kind, content, media_path, god_spoke, created_at
+      const rows = await db()
+        .prepare(
+          `SELECT id, book_id, chapter, verse, kind, content, media_path, god_spoke, created_at
              FROM verse_notes WHERE user_id = ? AND book_id = ? AND chapter = ? ORDER BY verse, id`,
-          )
-          .all(session.uid, Number(bookId), chapter),
-      };
+        )
+        .all(session.uid, Number(bookId), chapter);
+      return { notes: await attachNoteReviewFlags(rows as { id: number; content: string }[]) };
     }
 
     // 全部笔记（我的页面用），带经卷名
-    return {
-      notes: await db()
-        .prepare(
-          `SELECT n.id, n.book_id, b.name_cn AS book_name, n.chapter, n.verse, n.kind,
+    const rows = await db()
+      .prepare(
+        `SELECT n.id, n.book_id, b.name_cn AS book_name, n.chapter, n.verse, n.kind,
                   n.content, n.media_path, n.god_spoke, n.created_at
            FROM verse_notes n JOIN bible_books b ON b.id = n.book_id
            WHERE n.user_id = ? ORDER BY n.id DESC LIMIT 300`,
-        )
-        .all(session.uid),
-    };
+      )
+      .all(session.uid);
+    return { notes: await attachNoteReviewFlags(rows as { id: number; content: string }[]) };
   });
 }
 

@@ -70,15 +70,15 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       </header>
 
       {/* 统计条 */}
-      <section className="card mb-5 grid grid-cols-3 divide-x divide-line px-2 py-3.5">
+      <section className="card card-highlight mb-5 grid grid-cols-3 divide-x divide-brand-200/60 px-2 py-3.5">
         {[
           { value: summary.streak, unit: '天', label: '连续读经', icon: IconStreak },
           { value: summary.totalDevotions, unit: '次', label: '完整灵修', icon: IconFlame },
           { value: summary.totalNotes, unit: '条', label: '读经笔记', icon: IconNotes },
         ].map((s) => (
           <div key={s.label} className="px-2 text-center">
-            <s.icon className="mx-auto mb-1 text-brand-400" size={18} />
-            <p className="text-[22px] font-bold leading-none text-brand-600">
+            <s.icon className="mx-auto mb-1 text-brand-500" size={18} />
+            <p className="text-[22px] font-bold leading-none text-brand-500">
               {s.value}
               <span className="ml-0.5 text-xs font-semibold text-muted">{s.unit}</span>
             </p>
@@ -155,7 +155,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       )}
 
       {/* 提醒产品的核心主张 */}
-      <section className="card bg-brand-50/60 px-4 py-4">
+      <section className="card card-highlight px-4 py-4">
         <div className="flex gap-2">
           <IconSpark className="mt-0.5 shrink-0 text-brand-500" size={22} />
           <p className="text-[13.5px] font-medium leading-[1.9] text-brand-700">

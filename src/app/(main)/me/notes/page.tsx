@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getSession } from '@/lib/auth';
 import { db } from '@/lib/db';
 import NotesList, { type NoteItem } from '@/components/NotesList';
+import { attachNoteReviewFlags } from '@/lib/note-review';
 
 export default async function MyNotesPage({
   searchParams,
@@ -12,7 +13,7 @@ export default async function MyNotesPage({
   const session = await getSession();
   const onlySpoke = sp.filter === 'spoke';
 
-  const notes = await db()
+  const rawNotes = await db()
     .prepare(
       `SELECT n.id, n.book_id, b.name_cn AS book_name, n.chapter, n.verse, n.kind,
               n.content, n.media_path, n.god_spoke, n.created_at
@@ -20,7 +21,9 @@ export default async function MyNotesPage({
        WHERE n.user_id = ? ${onlySpoke ? 'AND n.god_spoke = 1' : ''}
        ORDER BY n.id DESC LIMIT 200`,
     )
-    .all<NoteItem>(session!.uid);
+    .all<Omit<NoteItem, 'readerReviewed'>>(session!.uid);
+
+  const notes = await attachNoteReviewFlags(rawNotes);
 
   return (
     <div className="px-4 py-5">

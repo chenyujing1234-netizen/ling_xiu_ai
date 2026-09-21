@@ -8,14 +8,51 @@
   /* 底部 Tab 高度 + iOS 安全区（R-G2） */
   --tabbar-h: 56px;
   --safe-b: env(safe-area-inset-bottom, 0px);
+  /* 全站字号缩放（zoom 会同步放大 px / rem 混排界面） */
+  --font-scale: 1.08;
+}
+
+html[data-font-scale='small'] {
+  --font-scale: 0.94;
+}
+html[data-font-scale='standard'] {
+  --font-scale: 1.08;
+}
+html[data-font-scale='large'] {
+  --font-scale: 1.16;
+}
+html[data-font-scale='xlarge'] {
+  --font-scale: 1.24;
+}
+
+html {
+  zoom: var(--font-scale);
+}
+
+@supports not (zoom: 1) {
+  html {
+    zoom: unset;
+    font-size: calc(16px * var(--font-scale));
+  }
 }
 
 html,
 body {
-  @apply bg-paper text-ink;
+  @apply text-ink;
+  background-color: rgb(var(--tw-paper));
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
   overscroll-behavior-y: none;
+}
+
+/* 页面 ambient：顶部品牌光晕 + 角落 accent，整体更有层次 */
+.page-canvas {
+  background:
+    radial-gradient(110% 70% at 50% -15%, rgb(var(--tw-brand-100) / 0.65), transparent 52%),
+    radial-gradient(55% 40% at 100% 0%, rgb(var(--tw-accent) / 0.12), transparent 45%),
+    radial-gradient(45% 35% at 0% 8%, rgb(var(--tw-brand-200) / 0.2), transparent 40%),
+    rgb(var(--tw-paper));
+  min-height: 100dvh;
 }
 
 body {
@@ -32,7 +69,7 @@ body {
 .scripture {
   @apply font-serifcn;
   line-height: 2.05;
-  font-size: 17px;
+  font-size: 18px;
 }
 
 /* 长按经文时禁止系统选择菜单弹出（R-G4） */
@@ -44,47 +81,81 @@ body {
 
 @layer components {
   .card {
-    @apply rounded-2xl bg-card border border-line shadow-soft;
+    @apply rounded-2xl border border-line/90 bg-card shadow-soft;
+    box-shadow: var(--tw-shadow-soft);
+  }
+  .card-highlight {
+    border-color: rgb(var(--tw-brand-300) / 0.45);
+    background: linear-gradient(155deg, rgb(var(--tw-brand-50)), rgb(var(--tw-card)) 48%);
+    box-shadow: var(--tw-shadow-soft), inset 0 1px 0 rgb(255 255 255 / 0.65);
   }
   .btn {
     @apply inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm
            font-semibold transition active:scale-[0.97] disabled:opacity-40 disabled:active:scale-100;
   }
   .btn-primary {
-    @apply btn bg-brand-500 text-white active:bg-brand-600;
+    @apply btn border border-brand-600/30 text-white shadow-glow;
+    background: linear-gradient(165deg, rgb(var(--tw-brand-400)), rgb(var(--tw-brand-600)));
+  }
+  .btn-primary:active:not(:disabled) {
+    background: linear-gradient(165deg, rgb(var(--tw-brand-500)), rgb(var(--tw-brand-700)));
   }
   .btn-ghost {
-    @apply btn border border-line bg-card text-ink;
+    @apply btn border border-line/90 bg-card text-ink shadow-sm;
+  }
+  /** 次要操作：AI 点评、查看历史、辅助功能（与主按钮 btn-primary 成对） */
+  .btn-secondary {
+    @apply btn w-full border border-brand-300/90 text-brand-700 shadow-sm;
+    background: linear-gradient(180deg, rgb(var(--tw-brand-50)), rgb(var(--tw-brand-100) / 0.55));
+  }
+  .btn-secondary:active:not(:disabled) {
+    background: rgb(var(--tw-brand-100));
+  }
+  .btn-danger {
+    @apply btn border border-accent/40 bg-card text-accent shadow-sm active:bg-accent/10;
   }
   .btn-quiet {
     @apply btn text-muted;
   }
   .field {
-    @apply w-full rounded-xl border border-line bg-card px-3.5 py-3 text-[15px] text-ink
-           outline-none placeholder:text-muted/70 focus:border-brand-300;
+    @apply w-full rounded-xl border border-line/90 bg-card px-3.5 py-3 text-[15px] text-ink shadow-sm
+           outline-none placeholder:text-muted/70 focus:border-brand-400 focus:ring-2 focus:ring-brand-300/35;
   }
   .chip {
-    @apply inline-flex items-center gap-1 rounded-full border border-line bg-brand-50
-           px-2.5 py-1 text-xs font-semibold text-brand-700;
+    @apply inline-flex items-center gap-1 rounded-full border border-brand-300/50 px-2.5 py-1 text-xs font-semibold
+           text-brand-700;
+    background: linear-gradient(180deg, rgb(var(--tw-brand-50)), rgb(var(--tw-brand-100) / 0.6));
   }
   .label {
-    @apply text-xs font-semibold tracking-wide text-brand-700;
+    @apply text-xs font-bold tracking-wide text-brand-600;
   }
   .section-title {
     @apply mb-2 flex items-center gap-2 text-[15px] font-bold leading-snug text-ink;
   }
   .section-title-icon {
-    @apply flex h-7 w-7 items-center justify-center rounded-lg bg-brand-100 text-brand-700;
+    @apply flex h-7 w-7 items-center justify-center rounded-lg text-brand-700 shadow-sm;
+    background: linear-gradient(145deg, rgb(var(--tw-brand-100)), rgb(var(--tw-brand-200) / 0.85));
   }
   .page-heading {
-    @apply text-[24px] font-bold leading-snug tracking-tight text-ink;
+    @apply bg-clip-text text-[24px] font-bold leading-snug tracking-tight text-transparent;
+    background-image: linear-gradient(120deg, rgb(var(--tw-ink)), rgb(var(--tw-brand-600)));
   }
   .lead-strong {
     @apply font-semibold text-ink;
   }
+  /** 经节旁 inline 笔记：少占版面，点开仍进编辑 */
+  .verse-note {
+    @apply mt-0.5 ml-2.5 max-w-[calc(100%-0.5rem)] border-l-2 border-brand-300/70 pl-2 py-0.5;
+  }
+  .verse-note-text {
+    @apply cursor-pointer text-[12px] leading-snug text-brand-700/90 line-clamp-2;
+  }
+  .verse-note-audio {
+    @apply mt-0.5 h-7 max-w-full;
+  }
   /* 底部弹出面板 */
   .sheet {
-    @apply fixed inset-x-0 bottom-0 z-50 rounded-t-3xl bg-card shadow-sheet;
+    @apply fixed inset-x-0 bottom-0 z-50 rounded-t-3xl border-t border-brand-200/40 bg-card shadow-sheet;
     padding-bottom: calc(var(--safe-b) + 16px);
     animation: sheet-up 0.24s cubic-bezier(0.32, 0.72, 0, 1);
   }
@@ -127,13 +198,13 @@ body {
 /* 录音时的呼吸动效 */
 @keyframes pulse-ring {
   0% {
-    box-shadow: 0 0 0 0 rgba(156, 91, 63, 0.45);
+    box-shadow: 0 0 0 0 rgb(var(--tw-accent) / 0.45);
   }
   70% {
-    box-shadow: 0 0 0 18px rgba(156, 91, 63, 0);
+    box-shadow: 0 0 0 18px rgb(var(--tw-accent) / 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(156, 91, 63, 0);
+    box-shadow: 0 0 0 0 rgb(var(--tw-accent) / 0);
   }
 }
 .recording {

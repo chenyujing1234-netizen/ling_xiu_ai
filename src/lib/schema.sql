@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS reading_settings (
   explore_book   INTEGER NOT NULL DEFAULT 1,
   explore_chapter INTEGER NOT NULL DEFAULT 1,
   theme          TEXT NOT NULL DEFAULT 'classic',
+  font_scale     TEXT NOT NULL DEFAULT 'standard',
   bilingual      INTEGER NOT NULL DEFAULT 1
 );
 
@@ -105,13 +106,24 @@ CREATE TABLE IF NOT EXISTS verse_notes (
 CREATE INDEX IF NOT EXISTS idx_note_user ON verse_notes(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_note_verse ON verse_notes(user_id, book_id, chapter, verse);
 
--- 逐节笔记的同行者点评（笔记文字未改则复用）
+-- 逐节笔记的陪读者点评（笔记文字未改则复用）
 CREATE TABLE IF NOT EXISTS verse_note_reviews (
   note_id       INTEGER PRIMARY KEY REFERENCES verse_notes(id) ON DELETE CASCADE,
   content_hash  TEXT NOT NULL,
   review        TEXT NOT NULL,
   rag_sources   TEXT,
   updated_at    TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS chapter_note_reviews (
+  user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  book_id       INTEGER NOT NULL,
+  chapter       INTEGER NOT NULL,
+  content_hash  TEXT NOT NULL,
+  review        TEXT NOT NULL,
+  rag_sources   TEXT,
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  PRIMARY KEY (user_id, book_id, chapter)
 );
 
 -- ========== 灵修会话（七阶段，强制顺序） ==========
@@ -179,7 +191,7 @@ CREATE TABLE IF NOT EXISTS coach_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_coach_dev ON coach_messages(devotion_id, id);
 
--- 各阶段「下一步」同行者短评（内容未改则复用，不重复调 LLM）
+-- 各阶段「下一步」陪读者短评（内容未改则复用，不重复调 LLM）
 CREATE TABLE IF NOT EXISTS devotion_stage_feedback (
   devotion_id   INTEGER NOT NULL REFERENCES devotions(id) ON DELETE CASCADE,
   stage         TEXT NOT NULL,

@@ -16,7 +16,9 @@ export default {
         brand: {
           50: cv('--tw-brand-50'),
           100: cv('--tw-brand-100'),
+          200: cv('--tw-brand-200'),
           300: cv('--tw-brand-300'),
+          400: cv('--tw-brand-400'),
           500: cv('--tw-brand-500'),
           600: cv('--tw-brand-600'),
           700: cv('--tw-brand-700'),
@@ -29,6 +31,7 @@ export default {
       boxShadow: {
         sheet: 'var(--tw-shadow-sheet)',
         soft: 'var(--tw-shadow-soft)',
+        glow: 'var(--tw-shadow-glow)',
       },
     },
   },

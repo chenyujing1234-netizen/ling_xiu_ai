@@ -154,6 +154,7 @@ export type Settings = {
   explore_book?: number;
   explore_chapter?: number;
   theme?: string;
+  font_scale?: string;
   bilingual: number;
 };
 

@@ -19,7 +19,7 @@ export default function BottomTab() {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card/95 backdrop-blur"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-brand-200/50 bg-card/92 shadow-[0_-4px_24px_rgb(var(--tw-brand-500)/0.08)] backdrop-blur-md"
       style={{ paddingBottom: 'var(--safe-b)' }}
     >
       <ul className="mx-auto flex max-w-lg">
@@ -37,12 +37,12 @@ export default function BottomTab() {
                     只靠文字颜色在 10px 字号下分不出来，得有个形状上的差别 */}
                 <span
                   className={`flex h-7 w-12 items-center justify-center rounded-full transition ${
-                    active ? 'bg-brand-100' : ''
+                    active ? 'bg-brand-500 text-white shadow-glow' : ''
                   }`}
                 >
-                  <tab.icon className={active ? 'text-brand-700' : 'text-muted'} />
+                  <tab.icon className={active ? 'text-white' : 'text-muted'} />
                 </span>
-                <span className={`text-[10px] ${active ? 'font-semibold text-brand-700' : 'text-muted'}`}>
+                <span className={`text-[10px] ${active ? 'font-bold text-brand-600' : 'text-muted'}`}>
                   {tab.label}
                 </span>
               </Link>
