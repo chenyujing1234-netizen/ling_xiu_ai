@@ -64,7 +64,7 @@ export default function HomeBannerTypewriter() {
 
   return (
     <p
-      className="max-w-[92%] text-center text-[16px] font-semibold leading-[1.55] text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.65)] sm:text-[18px]"
+      className="w-full text-left text-[16px] font-semibold leading-[1.55] text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.65)] sm:text-[18px]"
       aria-live="polite"
     >
       {visible.map((item, i) =>

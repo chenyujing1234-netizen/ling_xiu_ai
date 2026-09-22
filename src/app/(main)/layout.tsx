@@ -10,6 +10,7 @@ import FontScaleSync from '@/components/FontScaleSync';
 import SubpageBackBar from '@/components/SubpageBackBar';
 import ThemeSync from '@/components/ThemeSync';
 import { normalizeFontScale } from '@/lib/font-scale';
+import OnboardingGuide from '@/components/OnboardingGuide';
 import { normalizeTheme } from '@/lib/themes';
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
@@ -23,9 +24,14 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   const fontScale = normalizeFontScale(settings.font_scale);
   const isAdmin = session.role === 'admin';
   const pendingRequests = isAdmin ? await countPendingAccessRequests() : 0;
+  const showOnboarding = !settings.guide_seen;
 
   return (
     <AdminPendingProvider isAdmin={isAdmin} initialPending={pendingRequests}>
+      <OnboardingGuide
+        show={showOnboarding}
+        unlockScore={Number(process.env.DEVOTION_UNLOCK_SCORE || 40)}
+      />
       <ThemeSync theme={theme} />
       <FontScaleSync fontScale={fontScale} />
       <Suspense fallback={null}>

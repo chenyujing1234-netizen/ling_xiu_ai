@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/client';
 import { useAdminPending } from './AdminPendingProvider';
+import { SheetCloseButton } from '@/components/Ui';
 
 type Request = {
   id: number;
@@ -81,7 +82,8 @@ export default function AdminPanel({ books }: { books: BookBrief[] }) {
       {error && <p className="mb-3 rounded-xl bg-accent/10 px-4 py-3 text-sm text-accent">{error}</p>}
 
       {credential && (
-        <div className="card mb-4 border-brand-300 bg-brand-50 px-4 py-4">
+        <div className="card relative mb-4 border-brand-300 bg-brand-50 px-4 py-4 pr-12">
+          <SheetCloseButton onClick={() => setCredential(null)} />
           <p className="label mb-1.5">旧版申请无自设密码，请线下告知临时密码（只显示这一次）</p>
           <p className="text-[15px]">
             {credential.name} · {credential.phone}
@@ -92,9 +94,6 @@ export default function AdminPanel({ books }: { books: BookBrief[] }) {
           <p className="text-xs leading-relaxed text-muted">
             对方首次登录后会被要求立即修改密码。关掉此提示后无法再查看明文。
           </p>
-          <button className="btn-ghost mt-2.5 w-full" onClick={() => setCredential(null)}>
-            我已记下，关闭
-          </button>
         </div>
       )}
 

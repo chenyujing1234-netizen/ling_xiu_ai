@@ -1,17 +1,14 @@
 #!/usr/bin/env node
 /**
- * 发信自查。
- *
- * 这是个邀请制的工具：有人提交申请后如果没人收到提醒，他就一直被卡在门外，
- * 所以这条链路值得单独有个自查。按真实调用顺序逐段检查：
- * 配置 → 连得上 SMTP → 授权码对不对 → 真发一封。
+ * 发信自查。与 http_server_src/email_helper.py 同一条路径：
+ * python3 scripts/send_mail.py → SMTP_SSL smtp.qq.com:465
  *
  *   npm run mail:check          # 只查配置与登录，不发信
  *   npm run mail:check -- --send  # 真发一封到 ADMIN_NOTIFY_EMAIL
  */
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import nodemailer from 'nodemailer';
 
 for (const file of ['.env.local', '.env']) {
   try {
@@ -24,15 +21,16 @@ for (const file of ['.env.local', '.env']) {
   }
 }
 
-const HOST = process.env.SMTP_HOST || 'smtp.qq.com';
-const PORT = Number(process.env.SMTP_PORT || 465);
 const USER = process.env.SENDER_EMAIL || '';
 const PASS = process.env.SMTP_PASSWORD || '';
 const TO = process.env.ADMIN_NOTIFY_EMAIL || '594462206@qq.com';
+const HOST = process.env.SMTP_HOST || 'smtp.qq.com';
+const PORT = process.env.SMTP_PORT || '465';
 const doSend = process.argv.includes('--send');
+const script = join(process.cwd(), 'scripts/send_mail.py');
 
-console.log('发信配置');
-console.log(`  SMTP        ${HOST}:${PORT}${PORT === 465 ? '（SSL）' : ''}`);
+console.log('发信配置（与 http_server_src/email_helper.py 相同：SMTP_SSL）');
+console.log(`  SMTP        ${HOST}:${PORT}（SSL）`);
 console.log(`  发件人      ${USER || '（空）'}`);
 console.log(`  授权码      ${PASS ? `已填，${PASS.length} 位` : '（空）'}`);
 console.log(`  收件人      ${TO}`);
@@ -40,52 +38,44 @@ console.log(`  收件人      ${TO}`);
 if (!USER || !PASS) {
   const missing = [!USER && 'SENDER_EMAIL', !PASS && 'SMTP_PASSWORD'].filter(Boolean);
   console.log(`\n× 还差 ${missing.join(' 和 ')}，申请通知发不出去（申请本身不受影响）。`);
-  console.log('  在 .env.local 里填上：');
-  if (!USER) console.log('    SENDER_EMAIL=你的QQ邮箱@qq.com');
-  if (!PASS) console.log('    SMTP_PASSWORD=邮箱授权码（16 位，不是邮箱登录密码）');
-  if (!PASS) {
-    console.log('  授权码在 QQ 邮箱 → 设置 → 账号与安全 → 安全设置 →');
-    console.log('  开启「IMAP/SMTP 服务」→ 生成授权码。');
-  }
+  console.log('  在 .env.local 里填上 QQ 邮箱授权码（不是登录密码）：');
+  console.log('    SMTP_PASSWORD=16位授权码');
+  console.log('  或与 http_server_src 共用：在 /home/chenyj/http_server_src/.env 写入同样两项。');
   process.exit(1);
 }
 
-const tx = nodemailer.createTransport({
-  host: HOST,
-  port: PORT,
-  secure: PORT === 465,
-  auth: { user: USER, pass: PASS },
-  connectionTimeout: 10_000,
-  greetingTimeout: 10_000,
-  socketTimeout: 20_000,
-});
+function run(args, stdin) {
+  return spawnSync('python3', [script, ...args], {
+    encoding: 'utf8',
+    input: stdin,
+    env: process.env,
+    timeout: 25_000,
+  });
+}
 
 const t0 = Date.now();
-try {
-  await tx.verify();
-  console.log(`\n√ 连上 ${HOST} 并通过授权（${Date.now() - t0}ms）`);
-} catch (err) {
-  const msg = String(err?.message || err);
+const verified = run(['--verify']);
+if (verified.status !== 0) {
+  const msg = `${verified.stderr || ''}${verified.stdout || ''}`.trim();
   console.log(`\n× 登录失败：${msg}`);
   if (/authentication|535|invalid/i.test(msg)) {
     console.log('  多半是授权码不对，或者填成了邮箱登录密码 —— QQ 邮箱只认授权码。');
   } else if (/timeout|ETIMEDOUT|ECONNREFUSED/i.test(msg)) {
     console.log(`  连不上 ${HOST}:${PORT}，看看服务器出网是否被防火墙拦了 465 端口。`);
   }
-  tx.close();
   process.exit(1);
 }
+console.log(`\n√ 连上 ${HOST} 并通过授权（${Date.now() - t0}ms）`);
 
 if (!doSend) {
   console.log('\n配置没问题。加 --send 可以真发一封试试：npm run mail:check -- --send');
-  tx.close();
   process.exit(0);
 }
 
 const when = new Date().toLocaleString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' });
-try {
-  const info = await tx.sendMail({
-    from: USER,
+const sent = run(
+  ['--send'],
+  JSON.stringify({
     to: TO,
     subject: '[灵修] 发信自查',
     text: [
@@ -98,12 +88,11 @@ try {
       '',
       '—— 灵修工具',
     ].join('\n'),
-  });
-  console.log(`√ 已发出到 ${TO}（${info.messageId}）`);
-  console.log('  去收件箱确认一下；QQ 邮箱有时会先放进"垃圾邮件"，看到了标记为非垃圾即可。');
-} catch (err) {
-  console.log(`× 发送失败：${err?.message || err}`);
-  tx.close();
+  }),
+);
+if (sent.status !== 0) {
+  console.log(`× 发送失败：${(sent.stderr || sent.stdout || '').trim()}`);
   process.exit(1);
 }
-tx.close();
+console.log(`√ 已发出到 ${TO}（${(sent.stdout || '').trim()}）`);
+console.log('  去收件箱确认一下；QQ 邮箱有时会先放进"垃圾邮件"，看到了标记为非垃圾即可。');

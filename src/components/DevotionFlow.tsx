@@ -5,11 +5,17 @@ import Link from 'next/link';
 import { api, hardNavigate } from '@/lib/client';
 import BookPicker, { type BookBrief } from './BookPicker';
 import { useAutoSaveDevotionText } from './useAutoSaveDevotionText';
-import { IconLongPress, IconScripture, NoteReviewedBadge, VerseLongPressHint } from '@/components/Ui';
+import {
+  IconLongPress,
+  IconScripture,
+  NoteReviewedBadge,
+  VerseLongPressHint,
+} from '@/components/Ui';
 import { joinDictation } from '@/lib/dictate';
 import Dictate from './Dictate';
 import NoteSheet, { type NoteEdit, type VerseTarget } from './NoteSheet';
 import PageBackButton from './PageBackButton';
+import SheetModal from './SheetModal';
 import ChapterNotesReviewBlock from './ChapterNotesReviewBlock';
 import NoteReviewBlock from './NoteReviewBlock';
 import Waiting from './Waiting';
@@ -412,12 +418,9 @@ function Passage({
   }
   const textNoteCount = (notes ?? []).filter((n) => n.content?.trim()).length;
 
-  function pressStart(v: Verse, e: React.PointerEvent) {
-    if (e.pointerType !== 'touch') {
-      e.currentTarget.setPointerCapture?.(e.pointerId);
-      e.preventDefault();
-    }
-    startPoint.current = { x: e.clientX, y: e.clientY };
+  function pressStartAt(v: Verse, x: number, y: number) {
+    pressCancel();
+    startPoint.current = { x, y };
     setPressing(v.verse);
     timer.current = setTimeout(() => {
       navigator.vibrate?.(12);
@@ -432,6 +435,20 @@ function Passage({
       });
       setPressing(null);
     }, LONG_PRESS_MS);
+  }
+
+  function pressStart(v: Verse, e: React.PointerEvent) {
+    if (e.pointerType !== 'touch') {
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      e.preventDefault();
+    }
+    pressStartAt(v, e.clientX, e.clientY);
+  }
+
+  function touchStart(v: Verse, e: React.TouchEvent) {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0]!;
+    pressStartAt(v, t.clientX, t.clientY);
   }
 
   function pressMove(e: React.PointerEvent) {
@@ -516,6 +533,20 @@ function Passage({
                   onPointerUp={pressCancel}
                   onPointerCancel={pressCancel}
                   onPointerLeave={pressCancel}
+                  onTouchStart={(e) => touchStart(v, e)}
+                  onTouchMove={(e) => {
+                    if (!startPoint.current || e.touches.length !== 1) return;
+                    const t = e.touches[0]!;
+                    const slop = 10;
+                    if (
+                      Math.abs(t.clientX - startPoint.current.x) > slop ||
+                      Math.abs(t.clientY - startPoint.current.y) > slop
+                    ) {
+                      pressCancel();
+                    }
+                  }}
+                  onTouchEnd={pressCancel}
+                  onTouchCancel={pressCancel}
                   onContextMenu={(e) => e.preventDefault()}
                   className={`no-select rounded-lg px-2 py-1.5 transition ${
                     pressing === v.verse ? 'bg-brand-100' : ''
@@ -812,10 +843,9 @@ function StageFeedbackSheet({
   onClose: () => void;
 }) {
   return (
-    <>
-      <div className="fixed inset-0 z-50 bg-ink/40 fade-in" onClick={onClose} aria-hidden />
-      <div className="sheet z-50 max-h-[70vh] overflow-y-auto px-5 pb-6">
-        <div className="pt-3">
+    <SheetModal onClose={onClose} zBackdrop={85} zSheet={95} className="max-h-[75vh]">
+      <div className="px-5 pb-6">
+        <div className="pt-3 pr-10">
           <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
           <p className="text-[15px] font-semibold">陪读者点评</p>
           <p className="mt-0.5 text-xs text-muted">关于你刚完成的「{from}」</p>
@@ -828,7 +858,7 @@ function StageFeedbackSheet({
           继续
         </button>
       </div>
-    </>
+    </SheetModal>
   );
 }
 
@@ -957,7 +987,7 @@ function InquireStage({ d, act, sync, busy, reload, onViewSavedFeedback }: Stage
     save: sync,
     kind: 'question',
     minChars: 5,
-    resetAfterSave: (n) => n < 2,
+    resetAfterSave: false,
   });
   const listed = questions.filter((q) => q.id !== draftId);
 
@@ -1025,7 +1055,7 @@ function InquireStage({ d, act, sync, busy, reload, onViewSavedFeedback }: Stage
         />
         <div className="mt-1.5 flex items-center justify-between gap-2">
           <p className="text-xs text-muted">
-            已保存 {questions.length} 个问题（至少 2 个，停笔自动保存）
+            已保存 {questions.length} 个问题（至少 1 个，停笔自动保存）
           </p>
           <Dictate
             onText={(t) => setText((prev) => joinDictation(prev, t, ' '))}

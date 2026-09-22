@@ -155,6 +155,7 @@ export type Settings = {
   explore_chapter?: number;
   theme?: string;
   font_scale?: string;
+  guide_seen?: number;
   bilingual: number;
 };
 

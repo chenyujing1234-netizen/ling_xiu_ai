@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Recorder from './Recorder';
+import SheetModal from './SheetModal';
 import { transcribe } from '@/lib/dictate';
 
 /**
@@ -63,31 +64,20 @@ export default function Dictate({
       </button>
 
       {open && (
-        <>
-          <div className="fixed inset-0 z-40 bg-ink/35 fade-in" onClick={() => !busy && setOpen(false)} />
-          <div className="sheet px-5 pb-6">
-            <div className="pt-3">
+        <SheetModal onClose={() => setOpen(false)} closeDisabled={busy}>
+          <div className="px-5 pb-6">
+            <div className="pt-3 pr-10">
               <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[15px] font-semibold">口述</p>
-                <button
-                  onClick={() => setOpen(false)}
-                  disabled={busy}
-                  className="btn-quiet px-2"
-                  aria-label="关闭"
-                >
-                  ✕
-                </button>
-              </div>
+              <p className="text-[15px] font-semibold">口述</p>
             </div>
 
             {error && (
               <p className="mt-3 rounded-xl bg-accent/10 px-3.5 py-2.5 text-sm text-accent">{error}</p>
             )}
 
-            <Recorder autoStart busy={busy} onDone={handle} note={hint} />
+            <Recorder busy={busy} onDone={handle} note={hint} />
           </div>
-        </>
+        </SheetModal>
       )}
     </>
   );

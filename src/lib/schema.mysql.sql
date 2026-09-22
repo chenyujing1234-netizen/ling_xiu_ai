@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS reading_settings (
   explore_chapter INT NOT NULL DEFAULT 1,
   theme          VARCHAR(32) NOT NULL DEFAULT 'classic',
   font_scale     VARCHAR(16) NOT NULL DEFAULT 'standard',
+  guide_seen     TINYINT NOT NULL DEFAULT 0,   -- 首次使用指引是否已读
   bilingual      TINYINT NOT NULL DEFAULT 1,
   CONSTRAINT fk_settings_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

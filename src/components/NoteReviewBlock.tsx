@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/client';
 import { NoteReviewedBadge } from '@/components/Ui';
 import RagSourcesFootnote from './RagSourcesFootnote';
+import SheetModal from './SheetModal';
 import type { RagSource } from '@/lib/rag-sources';
 
 function ReviewSheet({
@@ -18,10 +19,9 @@ function ReviewSheet({
   onClose: () => void;
 }) {
   return (
-    <>
-      <div className="fixed inset-0 z-[60] bg-ink/40 fade-in" onClick={onClose} aria-hidden />
-      <div className="sheet z-[60] max-h-[75vh] overflow-y-auto px-5 pb-6">
-        <div className="pt-3">
+    <SheetModal onClose={onClose} zBackdrop={85} zSheet={95} className="max-h-[75vh]">
+      <div className="px-5 pb-6">
+        <div className="pt-3 pr-10">
           <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
           <p className="text-[15px] font-semibold">陪读者点评</p>
           <p className="mt-0.5 text-xs text-muted">关于你在 {refLabel} 的笔记</p>
@@ -30,11 +30,8 @@ function ReviewSheet({
           <p className="whitespace-pre-wrap text-[15px] leading-[1.85] text-ink/90">{text}</p>
           <RagSourcesFootnote sources={ragSources} />
         </div>
-        <button type="button" className="btn-primary mt-5 w-full py-3" onClick={onClose}>
-          好的
-        </button>
       </div>
-    </>
+    </SheetModal>
   );
 }
 

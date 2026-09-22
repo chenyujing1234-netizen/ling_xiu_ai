@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { api } from '@/lib/client';
 import { joinDictation, transcribe } from '@/lib/dictate';
 import Recorder from './Recorder';
 import NoteReviewBlock from './NoteReviewBlock';
+import SheetModal from './SheetModal';
 
 export type VerseTarget = {
   bookId: number;
@@ -47,8 +48,8 @@ export default function NoteSheet({
   onClose: () => void;
   onSaved?: () => void;
 }) {
-  // 改旧笔记就直接进"写下"，这时候要的是改字，不是换输入方式
-  const [tab, setTab] = useState<Tab>(editing ? 'text' : lastUsedInput);
+  // 改旧笔记进「写下」；新开笔记记住上次 Tab，但不再自动开麦（微信须用户点按钮）
+  const [tab, setTab] = useState<Tab>(editing ? 'text' : lastUsedInput());
   const [text, setText] = useState(editing?.content ?? '');
   const [godSpoke, setGodSpoke] = useState(editing?.godSpoke ?? false);
   const [busy, setBusy] = useState(false);
@@ -78,15 +79,6 @@ export default function NoteSheet({
       /* 隐私模式下写不进去就算了，不影响本次使用 */
     }
   }
-
-  // 打开面板时锁住背景滚动
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
 
   function done(message: string, hold = 700) {
     setToast(message);
@@ -171,19 +163,12 @@ export default function NoteSheet({
   }
 
   return (
-    <>
-      <div className="fixed inset-0 z-40 bg-ink/35 fade-in" onClick={onClose} />
-      <div className="sheet max-h-[88vh] overflow-y-auto no-bar">
-        <div className="sticky top-0 z-10 bg-card px-5 pt-3">
+    <SheetModal onClose={onClose} closeDisabled={busy || transcribing}>
+        <div className="sticky top-0 z-10 bg-card px-5 pb-0 pt-3 pr-12">
           <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="chip">{ref}</p>
-              <p className="scripture mt-2 line-clamp-3 text-[15px] text-ink/85">{target.cn}</p>
-            </div>
-            <button onClick={onClose} className="btn-quiet shrink-0 px-2" aria-label="关闭">
-              ✕
-            </button>
+          <div className="min-w-0">
+            <p className="chip">{ref}</p>
+            <p className="scripture mt-2 line-clamp-3 text-[15px] text-ink/85">{target.cn}</p>
           </div>
 
           <div className="mt-3 flex gap-1 border-b border-line">
@@ -255,10 +240,13 @@ export default function NoteSheet({
           {tab === 'audio' && (
             <div className="space-y-1">
               <Recorder
-                autoStart
                 busy={transcribing}
                 onDone={speakToText}
-                note={editing ? '说完点结束，接到这条笔记后面' : '说完点结束，转成文字直接记下，想改就点开这条笔记'}
+                note={
+                  editing
+                    ? '先点下方按钮开麦（微信里需手动点一下）· 说完点结束，接到这条笔记后面'
+                    : '先点下方按钮开麦（微信里需手动点一下）· 说完点结束，转成文字直接记下'
+                }
               />
               {/* 口述说完就直接入库，不再经过"写下"，这个勾选得在开口前就够得着 */}
               <div className="px-1 pb-2">{godSpokeBox}</div>
@@ -266,7 +254,6 @@ export default function NoteSheet({
           )}
 
         </div>
-      </div>
-    </>
+    </SheetModal>
   );
 }

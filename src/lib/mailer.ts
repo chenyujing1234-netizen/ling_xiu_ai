@@ -1,20 +1,52 @@
-import nodemailer from 'nodemailer';
+import { spawn } from 'node:child_process';
+import path from 'node:path';
 
 /**
  * 发信。目前只用来把"有人提交了使用申请"通知给管理员 ——
  * 这是个邀请制的工具，申请如果没人看见，人就一直被卡在门外。
  *
- * 走 QQ 邮箱的 SMTP over SSL（465），和 http_server_src/email_helper.py 一个路子：
- * SMTP_PASSWORD 填的是**邮箱授权码**，不是登录密码。
+ * 发信路径与 /home/chenyj/http_server_src/email_helper.py 相同：
+ * smtplib.SMTP_SSL('smtp.qq.com', 465) + SENDER_EMAIL / SMTP_PASSWORD（授权码）。
  */
-const HOST = process.env.SMTP_HOST || 'smtp.qq.com';
-const PORT = Number(process.env.SMTP_PORT || 465);
 const USER = process.env.SENDER_EMAIL || '';
 const PASS = process.env.SMTP_PASSWORD || '';
 const TO = process.env.ADMIN_NOTIFY_EMAIL || '594462206@qq.com';
 const APP_URL = process.env.APP_URL || '';
 
 export const mailerConfigured = Boolean(USER && PASS);
+
+const SCRIPT = path.join(process.cwd(), 'scripts/send_mail.py');
+
+function runMail(args: string[], stdin?: string): Promise<{ ok: boolean; out: string }> {
+  return new Promise((resolve) => {
+    const child = spawn('python3', [SCRIPT, ...args], {
+      cwd: process.cwd(),
+      env: process.env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let out = '';
+    let err = '';
+    child.stdout.on('data', (chunk) => {
+      out += String(chunk);
+    });
+    child.stderr.on('data', (chunk) => {
+      err += String(chunk);
+    });
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+    }, 25_000);
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      resolve({ ok: code === 0, out: (out + err).trim() });
+    });
+    child.on('error', (e) => {
+      clearTimeout(timer);
+      resolve({ ok: false, out: e.message });
+    });
+    if (stdin) child.stdin.write(stdin);
+    child.stdin.end();
+  });
+}
 
 /** 手机号在邮件里也遮一半：邮箱不一定只有我一个人能看到 */
 function maskPhone(phone: string) {
@@ -26,28 +58,14 @@ async function send(subject: string, text: string) {
     console.warn('[mail] 没配 SENDER_EMAIL / SMTP_PASSWORD，跳过发信：', subject);
     return false;
   }
-  // 每次现建：申请是低频动作，长连接白占着还容易被服务端掐断
-  const tx = nodemailer.createTransport({
-    host: HOST,
-    port: PORT,
-    secure: PORT === 465,
-    auth: { user: USER, pass: PASS },
-    // 卡住也别拖着：调用方多半在 after() 里，超时了记一笔日志就够
-    connectionTimeout: 10_000,
-    greetingTimeout: 10_000,
-    socketTimeout: 20_000,
-  });
-  try {
-    const info = await tx.sendMail({ from: USER, to: TO, subject, text });
-    console.log(`[mail] 已发出 → ${TO}（${info.messageId}）`);
+  const payload = JSON.stringify({ to: TO, subject, text });
+  const res = await runMail(['--send'], payload);
+  if (res.ok) {
+    console.log(`[mail] 已发出 → ${TO}（${res.out || 'smtp_ssl'}）`);
     return true;
-  } catch (err) {
-    // 发不出去不该影响业务，但一定要留下痕迹，否则申请就静悄悄丢了
-    console.error(`[mail] 发送失败：${(err as Error).message}`);
-    return false;
-  } finally {
-    tx.close();
   }
+  console.error(`[mail] 发送失败：${res.out || 'python send_mail.py 失败'}`);
+  return false;
 }
 
 /** 有人提交使用申请 → 通知管理员去审批 */

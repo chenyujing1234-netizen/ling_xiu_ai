@@ -218,7 +218,7 @@ node scripts/check-asr.mjs my.webm
 
 ### 申请通知邮件
 
-有人在 `/apply` 提交申请后，落库的同一次请求里发一封邮件给管理员。走 QQ 邮箱 SMTP over SSL（465）。
+有人在 `/apply` 提交申请后，落库的同一次请求里发一封邮件给管理员。发信路径与 `http_server_src/email_helper.py` 相同：`python3 scripts/send_mail.py` → `smtplib.SMTP_SSL('smtp.qq.com', 465)`。
 
 ```bash
 SENDER_EMAIL=你的QQ邮箱@qq.com
@@ -226,14 +226,12 @@ SMTP_PASSWORD=邮箱授权码            # 不是登录密码
 ADMIN_NOTIFY_EMAIL=594462206@qq.com  # 留空即这个默认值
 ```
 
-`SMTP_PASSWORD` 填的是**授权码**：QQ 邮箱 → 设置 → 账号与安全 → 安全设置 → 开启 IMAP/SMTP 服务 → 生成授权码。填登录密码会被拒（`535 Authentication failed`）。
+`SMTP_PASSWORD` 填的是**授权码**：QQ 邮箱 → 设置 → 账号与安全 → 安全设置 → 开启 IMAP/SMTP 服务 → 生成授权码。填登录密码会被拒（`535 Authentication failed`）。也可写在 `/home/chenyj/http_server_src/.env`，与那边共用同一套账号。
 
 两个关键取舍：
 
 - **发信放在 `after()` 里**，申请人不用等 SMTP 那几秒（实测提交仍是 0.3s 返回）。
 - **发信失败不影响申请**。两项配置留空就直接跳过，日志记一行 `[mail] 没配…`；发送失败记 `[mail] 发送失败: …`。申请早已落库，管理端「待审批」照常能看到，邮件只是提醒。
-
-`nodemailer` 同样要列进 `serverExternalPackages`，理由和 `ws` 一样。
 
 ```bash
 # 自查：配置 → 连上 SMTP → 授权码是否有效

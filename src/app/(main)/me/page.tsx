@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { getSession } from '@/lib/auth';
 import { summaryOf } from '@/lib/stats';
-import { getSettings, refLabel } from '@/lib/bible';
+import { getSettings } from '@/lib/bible';
 import LogoutButton from '@/components/LogoutButton';
 import AdminMeLink from '@/components/AdminMeLink';
+import ShareAppBlock from '@/components/ShareAppBlock';
 import {
   IconChevronRight,
   IconFlame,
@@ -16,7 +17,7 @@ import {
 export default async function MePage() {
   const session = await getSession();
   const [s, settings] = await Promise.all([summaryOf(session!.uid), getSettings(session!.uid)]);
-  const cursorLabel = await refLabel(settings.cursor_book, settings.cursor_chapter);
+  const appUrl = process.env.APP_URL?.replace(/\/$/, '') || 'https://linkpal.cloud';
 
   const links = [
     {
@@ -74,6 +75,7 @@ export default async function MePage() {
         ))}
 
         {session!.role === 'admin' && <AdminMeLink />}
+        <ShareAppBlock appUrl={appUrl} />
       </ul>
 
       <LogoutButton />

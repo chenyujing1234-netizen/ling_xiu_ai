@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { SheetCloseButton } from '@/components/Ui';
 
 export type BookBrief = { id: number; name: string; chapters: number; testament: string };
 
@@ -24,7 +25,9 @@ export default function BookPicker({
     <>
       <div className="fixed inset-0 z-40 bg-ink/35 fade-in" onClick={onClose} />
       <div className="sheet z-40 flex max-h-[80vh] flex-col">
-        <div className="px-5 pt-3">
+        <div className="relative flex min-h-0 flex-1 flex-col">
+        <SheetCloseButton onClick={onClose} />
+        <div className="px-5 pt-3 pr-12">
           <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
           <p className="mb-2 text-[15px] font-semibold">{title}</p>
         </div>
@@ -70,6 +73,7 @@ export default function BookPicker({
               ))}
             </div>
           </div>
+        </div>
         </div>
       </div>
     </>

@@ -48,7 +48,7 @@ export default function PageBanner({
               className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,rgba(0,0,0,0.35)_0%,rgba(0,0,0,0.2)_45%,rgba(0,0,0,0.35)_100%)]"
               aria-hidden
             />
-            <div className="absolute inset-0 flex items-center justify-center px-5 py-3">
+            <div className="absolute inset-0 flex items-center justify-start px-5 py-3">
               <HomeBannerTypewriter />
             </div>
           </>

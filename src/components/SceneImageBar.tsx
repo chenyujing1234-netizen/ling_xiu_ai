@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/client';
 import Waiting from './Waiting';
+import { SheetCloseButton } from '@/components/Ui';
 
 /**
  * 选段配图：为他自己圈的这几节生成一张画面。
@@ -103,21 +104,13 @@ export default function SceneImageBar({
       {open && (
         <>
           <div className="fixed inset-0 z-40 bg-ink/35 fade-in" onClick={() => !busy && setOpen(false)} />
-          <div className="sheet max-h-[88vh] overflow-y-auto no-bar px-5 pb-6">
-            <div className="sticky top-0 z-10 -mx-5 mb-3 bg-card px-5 pt-3">
+          <div className="sheet relative max-h-[88vh] overflow-y-auto no-bar px-5 pb-6">
+            <SheetCloseButton onClick={() => setOpen(false)} disabled={busy} />
+            <div className="sticky top-0 z-10 -mx-5 mb-3 bg-card px-5 pt-3 pr-12">
               <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
-              <div className="flex items-center justify-between gap-2 pb-2">
-                <div className="min-w-0">
-                  <p className="truncate text-[15px] font-semibold">{label}</p>
-                  <p className="text-[11px] text-muted">共 {count} 节</p>
-                </div>
-                <button
-                  onClick={() => setOpen(false)}
-                  disabled={busy}
-                  className="btn-ghost px-3 py-1.5 text-xs"
-                >
-                  关闭
-                </button>
+              <div className="min-w-0 pb-2">
+                <p className="truncate text-[15px] font-semibold">{label}</p>
+                <p className="text-[11px] text-muted">共 {count} 节</p>
               </div>
             </div>
 

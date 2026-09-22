@@ -1,37 +1,32 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { canUseInPageRecorder, isWeChatBrowser } from '@/lib/recorder-capability';
 
-/** 说太久会把请求体撑得很大，到点自动收尾 */
 const MAX_MS = 120_000;
-/** 比这更短基本是误触，不值得送去识别 */
 const MIN_MS = 500;
 
-/**
- * 口述（R-B3）。点「口述」后自动开录，再点一次结束并转成文字；
- * 音频只在内存里中转，不落盘也不入库。
- */
 export default function Recorder({
   onDone,
   busy,
   note,
-  autoStart,
 }: {
   onDone: (blob: Blob) => void;
   busy?: boolean;
-  /** 松开之后文字去哪儿，由调用方说明：笔记那边是直接记下，灵修那边是填回输入框 */
   note?: string;
-  /** 为 true 时挂载后立刻开始录音（口述弹层 / 口述页签） */
   autoStart?: boolean;
 }) {
+  const useInPage = canUseInPageRecorder();
   const [state, setState] = useState<'idle' | 'starting' | 'recording'>('idle');
   const [ms, setMs] = useState(0);
   const [error, setError] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+  const wechat = isWeChatBrowser();
 
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  const active = useRef(false);
+  const genRef = useRef(0);
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -49,14 +44,14 @@ export default function Recorder({
   }, [clearTimer]);
 
   const teardown = useCallback(() => {
-    active.current = false;
+    genRef.current += 1;
     clearTimer();
     recorder.current?.stream.getTracks().forEach((t) => t.stop());
     if (recorder.current && recorder.current.state !== 'inactive') {
       try {
         recorder.current.stop();
       } catch {
-        /* already stopped */
+        /* noop */
       }
     }
     recorder.current = null;
@@ -66,37 +61,42 @@ export default function Recorder({
 
   const beginRecording = useCallback(async () => {
     if (busy || stateRef.current !== 'idle') return;
-    active.current = true;
+    const gen = ++genRef.current;
     setError('');
     setState('starting');
 
-    if (!navigator.mediaDevices?.getUserMedia) {
-      active.current = false;
-      setState('idle');
-      setError('当前浏览器不支持录音，请改用打字');
-      return;
-    }
-
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true },
+      });
     } catch {
-      active.current = false;
+      if (gen !== genRef.current) return;
       setState('idle');
-      setError('打不开话筒。请允许麦克风权限，或改用打字');
+      setError('打不开话筒。请在系统设置里允许微信使用麦克风，或改用「写下」');
       return;
     }
 
-    if (!active.current) {
+    if (gen !== genRef.current) {
       stream.getTracks().forEach((t) => t.stop());
       setState('idle');
       return;
     }
 
-    const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((m) =>
+    const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/aac'].find((m) =>
       MediaRecorder.isTypeSupported?.(m),
     );
-    const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+
+    let rec: MediaRecorder;
+    try {
+      rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    } catch {
+      stream.getTracks().forEach((t) => t.stop());
+      setState('idle');
+      setError('无法启动录音，请点「用系统录音」或改用写下');
+      return;
+    }
+
     chunks.current = [];
     rec.ondataavailable = (ev) => ev.data.size && chunks.current.push(ev.data);
     rec.onstop = () => {
@@ -113,7 +113,15 @@ export default function Recorder({
       onDone(blob);
     };
 
-    rec.start();
+    try {
+      rec.start();
+    } catch {
+      stream.getTracks().forEach((t) => t.stop());
+      setState('idle');
+      setError('录音启动失败，请再试一次');
+      return;
+    }
+
     recorder.current = rec;
     startAt.current = Date.now();
     setMs(0);
@@ -122,36 +130,66 @@ export default function Recorder({
       const d = Date.now() - startAt.current;
       setMs(d);
       if (d >= MAX_MS) {
-        active.current = false;
+        genRef.current += 1;
         stop();
       }
     }, 100);
   }, [busy, onDone, stop]);
 
-  useEffect(() => {
-    if (!autoStart || busy) return;
-    void beginRecording();
-    return () => {
-      active.current = false;
-      if (recorder.current) stop();
-    };
-    // 只在挂载 / autoStart 变化时自动开录，不把 beginRecording 放进依赖以免重复触发
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoStart]);
-
   function onTap() {
     if (busy) return;
     if (state === 'recording') {
-      active.current = false;
+      genRef.current += 1;
       stop();
       return;
     }
     if (state === 'idle') void beginRecording();
   }
 
+  function onFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || file.size === 0) return;
+    onDone(file);
+  }
+
   const mmss = `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${String(
     Math.floor((ms % 60000) / 1000),
   ).padStart(2, '0')}`;
+
+  if (!useInPage) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-3">
+        {error && <p className="text-center text-sm text-accent">{error}</p>}
+        <p className="text-center text-sm leading-relaxed text-muted">
+          {isWeChatBrowser()
+            ? '当前微信环境请用系统录音，录完会自动转成文字。'
+            : '当前浏览器不支持页内录音，请用系统录音或改用写下。'}
+        </p>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="audio/*"
+          capture
+          className="hidden"
+          onChange={onFilePicked}
+        />
+        <button
+          type="button"
+          className="btn-primary w-full max-w-xs py-3"
+          disabled={busy}
+          onClick={() => fileRef.current?.click()}
+        >
+          {busy ? '正在转成文字…' : '用系统录音'}
+        </button>
+        <p className="text-center text-xs text-muted">
+          {note}
+          {note && <br />}
+          录完后选择刚生成的语音文件即可
+        </p>
+      </div>
+    );
+  }
 
   const hint = busy
     ? '正在转成文字…'
@@ -194,6 +232,26 @@ export default function Recorder({
         {note && <br />}
         只留下识别出的文字，不保存录音文件 · 单次最长 2 分钟
       </p>
+      {wechat && (
+        <>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="audio/*"
+            capture
+            className="hidden"
+            onChange={onFilePicked}
+          />
+          <button
+            type="button"
+            className="btn-ghost text-xs"
+            disabled={busy}
+            onClick={() => fileRef.current?.click()}
+          >
+            微信里若无法开麦，改用系统录音
+          </button>
+        </>
+      )}
     </div>
   );
 }

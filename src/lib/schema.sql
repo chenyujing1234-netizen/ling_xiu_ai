@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS reading_settings (
   explore_chapter INTEGER NOT NULL DEFAULT 1,
   theme          TEXT NOT NULL DEFAULT 'classic',
   font_scale     TEXT NOT NULL DEFAULT 'standard',
+  guide_seen     INTEGER NOT NULL DEFAULT 0,
   bilingual      INTEGER NOT NULL DEFAULT 1
 );
 

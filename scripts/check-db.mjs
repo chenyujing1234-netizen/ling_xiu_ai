@@ -111,6 +111,22 @@ if (!reqPwCol.c) {
   console.log('  · 已添加 access_requests.password_hash 列');
 }
 
+const [[guideSeenCol]] = await conn.query(
+  `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
+   WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'reading_settings' AND COLUMN_NAME = 'guide_seen'`,
+  [process.env.MYSQL_DATABASE],
+);
+if (!guideSeenCol.c) {
+  await conn.query(`ALTER TABLE reading_settings ADD COLUMN guide_seen TINYINT NOT NULL DEFAULT 0`);
+  await conn.query(
+    `UPDATE reading_settings rs
+     INNER JOIN users u ON u.id = rs.user_id
+     SET rs.guide_seen = 1
+     WHERE u.last_login_at IS NOT NULL`,
+  );
+  console.log('  · 已添加 reading_settings.guide_seen（老用户默认已读）');
+}
+
 for (const col of ['explore_book', 'explore_chapter', 'theme', 'font_scale']) {
   const def =
     col === 'theme'
