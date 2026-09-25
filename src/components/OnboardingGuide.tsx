@@ -92,7 +92,7 @@ export default function OnboardingGuide({
             <span className="font-semibold text-ink">今日</span>：看每日读经计划与进度；横幅会提醒你——先自己想，再遇见引导。
           </p>
           <p>
-            <span className="font-semibold text-ink">经文资料</span>：在灵修页第二个页签，查背景与注释；按住经节可记笔记。
+            <span className="font-semibold text-ink">经文资料</span>：在灵修页第二个页签，查背景与注释；按住经节可记笔记，点「配图」可生成本节画面。
           </p>
           <p>
             <span className="font-semibold text-ink">我的</span>：笔记、灵修记录、外观与字号都在这里调。

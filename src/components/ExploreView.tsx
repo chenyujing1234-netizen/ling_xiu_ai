@@ -1,12 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/client';
 import KnowledgeGraph, { type GraphData } from './KnowledgeGraph';
 import Mindmap, { type MindmapNode } from './Mindmap';
 import Waiting from './Waiting';
 import RagSourcesFootnote from './RagSourcesFootnote';
+import ImageStylePicker, { usePreferredImageStyle } from './ImageStylePicker';
+import { useBackgroundJobs } from './BackgroundJobsProvider';
+import { insightsAiLabel } from '@/lib/background-ai';
 import type { RagSource } from '@/lib/rag-sources';
 
 type Elements = {
@@ -148,6 +151,7 @@ function LazyPanel<T>({
   chapter,
   actionLabel,
   hint,
+  extraQuery = '',
   children,
 }: {
   kind: string;
@@ -155,29 +159,45 @@ function LazyPanel<T>({
   chapter: number;
   actionLabel: string;
   hint: string;
+  /** 追加到 insights 请求，例如 &style=watercolor */
+  extraQuery?: string;
   children: (data: T, extra: { unlocked?: boolean; lockedHint?: string; ragSources?: RagSource[] }) => React.ReactNode;
 }) {
+  const { runJob } = useBackgroundJobs();
+  const panelRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<T | null>(null);
   const [extra, setExtra] = useState<{ unlocked?: boolean; lockedHint?: string; ragSources?: RagSource[] }>({});
   const [busy, setBusy] = useState(false);
   const [probing, setProbing] = useState(true);
   const [error, setError] = useState('');
 
-  const load = useCallback(async () => {
-    setBusy(true);
+  const load = useCallback(() => {
     setError('');
-    try {
-      const res = await api<{ data: T; unlocked?: boolean; lockedHint?: string; ragSources?: RagSource[] }>(
-        `/api/insights?kind=${kind}&book=${book}&chapter=${chapter}`,
-      );
-      setData(res.data);
-      setExtra({ unlocked: res.unlocked, lockedHint: res.lockedHint, ragSources: res.ragSources });
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }, [kind, book, chapter]);
+    setBusy(true);
+    const rect = panelRef.current?.getBoundingClientRect();
+    const throwFrom = rect
+      ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+      : undefined;
+
+    const { promise } = runJob({
+      label: `${insightsAiLabel(kind)} · ${book}:${chapter}`,
+      throwFrom,
+      task: () =>
+        api<{ data: T; unlocked?: boolean; lockedHint?: string; ragSources?: RagSource[] }>(
+          `/api/insights?kind=${kind}&book=${book}&chapter=${chapter}${extraQuery}`,
+        ),
+      onSuccess: (res) => {
+        setData(res.data);
+        setExtra({ unlocked: res.unlocked, lockedHint: res.lockedHint, ragSources: res.ragSources });
+      },
+      onError: (err) => setError(err.message),
+      present: () => {
+        panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      },
+    });
+
+    void promise.finally(() => setBusy(false));
+  }, [kind, book, chapter, extraQuery, runJob]);
 
   /**
    * 生成过的内容要能复原。
@@ -192,7 +212,7 @@ function LazyPanel<T>({
     setError('');
     setProbing(true);
     api<{ data: T | null; unlocked?: boolean; lockedHint?: string; ragSources?: RagSource[] }>(
-      `/api/insights?kind=${kind}&book=${book}&chapter=${chapter}&cacheOnly=1`,
+      `/api/insights?kind=${kind}&book=${book}&chapter=${chapter}&cacheOnly=1${extraQuery}`,
     )
       .then((res) => {
         if (!alive || !res.data) return;
@@ -208,7 +228,7 @@ function LazyPanel<T>({
     return () => {
       alive = false;
     };
-  }, [kind, book, chapter]);
+  }, [kind, book, chapter, extraQuery]);
 
   if (data) {
     return (
@@ -229,14 +249,17 @@ function LazyPanel<T>({
 
   if (busy) {
     return (
-      <div className="rounded-2xl border border-dashed border-line px-5">
-        <Waiting text="正在生成…" expect="通常 20-60 秒，生成后会缓存" />
+      <div
+        ref={panelRef}
+        className="rounded-2xl border border-dashed border-brand-200 bg-brand-50/50 px-5 py-8 text-center text-sm text-brand-800"
+      >
+        已在后台生成「{actionLabel.replace(/^生成/, '')}」，请看右上角红点袋；完成后会自动展示结果。
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-dashed border-line px-5 py-10 text-center">
+    <div ref={panelRef} className="rounded-2xl border border-dashed border-line px-5 py-10 text-center">
       <p className="mb-4 text-sm leading-relaxed text-muted">{hint}</p>
       {error && <p className="mb-3 text-sm text-accent">{error}</p>}
       <button className="btn-primary" onClick={load}>
@@ -424,37 +447,45 @@ function MindmapPanel({ book, chapter, label }: { book: number; chapter: number;
 }
 
 function ImagePanel({ book, chapter, label }: { book: number; chapter: number; label: string }) {
+  const [style, setStyle] = usePreferredImageStyle();
+  const styleQ = `&style=${encodeURIComponent(style)}`;
+
   return (
-    <LazyPanel<{ url: string | null }>
-      kind="image"
-      book={book}
-      chapter={chapter}
-      actionLabel="生成意境配图"
-      hint="根据这一章的场景生成一张意境画面，帮助记忆。生成需要较长时间，请耐心等待。"
-    >
-      {(data) =>
-        data.url ? (
-          <figure>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={data.url}
-              alt={`${label} 意境配图`}
-              width={1024}
-              height={1024}
-              decoding="async"
-              className="aspect-square w-full rounded-2xl border border-line bg-line/30 object-cover"
-            />
-            <figcaption className="mt-2 text-center text-xs text-muted">
-              {label} · AI 生成的意境画面，非历史考据插图
-            </figcaption>
-          </figure>
-        ) : (
-          <p className="card px-4 py-6 text-center text-sm text-muted">
-            未配置文生图模型。在 .env.local 设置 AI_MODEL_IMAGE 后即可生成。
-          </p>
-        )
-      }
-    </LazyPanel>
+    <div className="space-y-4">
+      <ImageStylePicker value={style} onChange={setStyle} />
+      <LazyPanel<{ url: string | null }>
+        key={style}
+        kind="image"
+        book={book}
+        chapter={chapter}
+        extraQuery={styleQ}
+        actionLabel="生成意境配图"
+        hint="根据这一章的场景与所选风格生成一张意境画面。生成需要较长时间，请耐心等待。"
+      >
+        {(data) =>
+          data.url ? (
+            <figure>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={data.url}
+                alt={`${label} 意境配图`}
+                width={1024}
+                height={1024}
+                decoding="async"
+                className="aspect-square w-full rounded-2xl border border-line bg-line/30 object-cover"
+              />
+              <figcaption className="mt-2 text-center text-xs text-muted">
+                {label} · AI 生成的意境画面，非历史考据插图
+              </figcaption>
+            </figure>
+          ) : (
+            <p className="card px-4 py-6 text-center text-sm text-muted">
+              未配置文生图模型。在 .env.local 设置 AI_MODEL_IMAGE 后即可生成。
+            </p>
+          )
+        }
+      </LazyPanel>
+    </div>
   );
 }
 

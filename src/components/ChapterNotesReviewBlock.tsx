@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/client';
 import { NoteReviewedBadge } from '@/components/Ui';
 import RagSourcesFootnote from './RagSourcesFootnote';
 import SheetModal from './SheetModal';
+import { useBackgroundJobs } from './BackgroundJobsProvider';
 import type { RagSource } from '@/lib/rag-sources';
 
 function SummarySheet({
@@ -52,6 +53,7 @@ export default function ChapterNotesReviewBlock({
   textNoteCount: number;
   chapterReviewed?: boolean;
 }) {
+  const { runJob } = useBackgroundJobs();
   const [open, setOpen] = useState(false);
   const [review, setReview] = useState<string | null>(null);
   const [noteCount, setNoteCount] = useState(textNoteCount);
@@ -59,6 +61,7 @@ export default function ChapterNotesReviewBlock({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [reviewed, setReviewed] = useState(Boolean(chapterReviewed));
+  const btnRef = useRef<HTMLButtonElement>(null);
 
   const refLabel = `${bookName} ${chapter}章`;
 
@@ -71,32 +74,49 @@ export default function ChapterNotesReviewBlock({
   async function loadSummary() {
     setErr('');
     setBusy(true);
-    try {
-      let res = await api<{
-        review: string | null;
-        cached: boolean;
-        ragSources?: RagSource[];
-        noteCount: number;
-      }>(`/api/notes/chapter-review?book=${bookId}&chapter=${chapter}&cacheOnly=1`, { method: 'POST' });
-      if (!res.review?.trim()) {
-        res = await api<{
+
+    const rect = btnRef.current?.getBoundingClientRect();
+    const throwFrom = rect
+      ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+      : undefined;
+
+    const { promise } = runJob({
+      label: `本章笔记总结 ${refLabel}`,
+      throwFrom,
+      task: async () => {
+        let res = await api<{
           review: string | null;
           cached: boolean;
           ragSources?: RagSource[];
           noteCount: number;
-        }>(`/api/notes/chapter-review?book=${bookId}&chapter=${chapter}`, { method: 'POST' });
-      }
-      if (!res.review?.trim()) {
-        setErr('暂时无法生成总结，稍后再试');
-        return;
-      }
-      setReview(res.review);
-      setNoteCount(res.noteCount);
-      setRagSources(res.ragSources ?? []);
-      setReviewed(true);
-      setOpen(true);
-    } catch (e) {
-      setErr((e as Error).message);
+        }>(`/api/notes/chapter-review?book=${bookId}&chapter=${chapter}&cacheOnly=1`, {
+          method: 'POST',
+        });
+        if (!res.review?.trim()) {
+          res = await api<{
+            review: string | null;
+            cached: boolean;
+            ragSources?: RagSource[];
+            noteCount: number;
+          }>(`/api/notes/chapter-review?book=${bookId}&chapter=${chapter}`, { method: 'POST' });
+        }
+        if (!res.review?.trim()) throw new Error('暂时无法生成总结，稍后再试');
+        return res;
+      },
+      onSuccess: (res) => {
+        setReview(res.review!);
+        setNoteCount(res.noteCount);
+        setRagSources(res.ragSources ?? []);
+        setReviewed(true);
+      },
+      onError: (e) => setErr(e.message),
+      present: () => setOpen(true),
+    });
+
+    try {
+      await promise;
+    } catch {
+      /* handled */
     } finally {
       setBusy(false);
     }
@@ -104,16 +124,22 @@ export default function ChapterNotesReviewBlock({
 
   return (
     <>
-      <div className="mx-4 mb-2 flex items-center gap-1.5">
-        {reviewed && <NoteReviewedBadge />}
-        <button
-          type="button"
-          disabled={busy}
-          onClick={loadSummary}
-          className="btn-secondary flex-1 py-2 text-xs"
-        >
-          {busy ? '陪读者在读本章笔记…' : reviewed ? '再看本章笔记总结' : '本章笔记总结点评'}
-        </button>
+      <div className="mx-4 mb-2 space-y-1.5">
+        <div className="flex items-center gap-1.5">
+          {reviewed && <NoteReviewedBadge />}
+          <button
+            ref={btnRef}
+            type="button"
+            disabled={busy}
+            onClick={() => void loadSummary()}
+            className="btn-secondary flex-1 py-2 text-xs"
+          >
+            {busy ? '后台生成中…' : reviewed ? '再看本章笔记总结' : '本章笔记总结点评'}
+          </button>
+        </div>
+        {busy && (
+          <p className="text-[10px] text-brand-700">请看右上角红点袋，完成后会自动弹出总结</p>
+        )}
       </div>
       {err && <p className="mx-4 mb-2 text-[11px] text-accent">{err}</p>}
       {open && review && (

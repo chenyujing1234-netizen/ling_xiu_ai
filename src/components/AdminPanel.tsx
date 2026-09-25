@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/client';
 import { useAdminPending } from './AdminPendingProvider';
 import { SheetCloseButton } from '@/components/Ui';
+import AdminKnowledgeTab from './AdminKnowledgeTab';
 
 type Request = {
   id: number;
@@ -46,7 +47,7 @@ type Resource = {
 };
 
 type BookBrief = { id: number; name: string; chapters: number };
-type Tab = 'requests' | 'users' | 'resources';
+type Tab = 'requests' | 'users' | 'resources' | 'knowledge';
 
 export default function AdminPanel({ books }: { books: BookBrief[] }) {
   const [tab, setTab] = useState<Tab>('requests');
@@ -58,12 +59,13 @@ export default function AdminPanel({ books }: { books: BookBrief[] }) {
     <div className="px-4 py-5">
       <header className="mb-4">
         <h1 className="text-[22px] font-semibold">管理后台</h1>
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
           {(
             [
               ['requests', '使用申请'],
               ['users', '成员'],
               ['resources', '讲道资源'],
+              ['knowledge', '知识库'],
             ] as [Tab, string][]
           ).map(([key, label]) => (
             <button
@@ -100,6 +102,7 @@ export default function AdminPanel({ books }: { books: BookBrief[] }) {
       {tab === 'requests' && <RequestsTab onError={setError} onCredential={setCredential} />}
       {tab === 'users' && <UsersTab onError={setError} onCredential={setCredential} />}
       {tab === 'resources' && <ResourcesTab books={books} onError={setError} />}
+      {tab === 'knowledge' && <AdminKnowledgeTab onError={setError} />}
     </div>
   );
 }

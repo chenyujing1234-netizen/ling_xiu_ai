@@ -6,11 +6,13 @@
  * 但不给标准答案、不下神学定论、不替用户完成灵修。
  */
 
+import { imageStylePrompt, normalizeImageStyle } from './image-styles';
+
 /** 书本 RAG / 本地资料块：注入到各类生成提示词 */
 export function bookRagKnowledgeSection(knowledge?: string): string {
   if (!knowledge?.trim()) return '';
   return `
-【书本知识库检索摘录 —— 请先阅读再回应；可补充背景、注释与多种理解角度，仍须遵守铁律：不给唯一标准神学定论、不替用户完成灵修】
+【指定书本知识库检索摘录 —— 检索范围已由系统指定，请勿自行改换或另选知识库；可补充背景、注释与多种理解角度，仍须遵守铁律：不给唯一标准神学定论、不替用户完成灵修】
 ${knowledge.trim()}
 `;
 }
@@ -207,7 +209,7 @@ ${input.userContent || '（没有留下文字）'}
 ${input.extra ? `\n【补充上下文】\n${input.extra}\n` : ''}
 ${bookRagKnowledgeSection(input.knowledge)}
 
-请写一段**陪读者点评**（120-220 字）：
+请写一段**陪读者点评**（200 字以内）：
 1. 先具体引用他原话里的 1-2 处，肯定他真的在读、在想的部分；
 2. 再 gently 指出还可以往哪一层推进（追问式，不给标准答案，不下神学定论）；
 3. 像面对面说话，不用 Markdown 标题和条目符号。
@@ -220,13 +222,8 @@ export function noteReviewPrompt(input: {
   ref: string;
   verseText: string;
   noteContent: string;
-  godSpoke?: boolean;
   knowledge?: string;
 }): string {
-  const spoke = input.godSpoke
-    ? '\n读者标记了「这一节神对我说话」——回应时可以留意，但不要替他下定论说"神一定说了什么"。\n'
-    : '';
-
   return `${COACH_PERSONA}
 
 读者在以下经文旁写下了笔记，请你以陪读者身份回应。
@@ -234,16 +231,16 @@ export function noteReviewPrompt(input: {
 经文出处：${input.ref}
 经文正文：
 ${input.verseText}
-${spoke}
+
 【他的笔记】
 ${input.noteContent}
 ${bookRagKnowledgeSection(input.knowledge)}
 
-【篇幅铁律】全文不超过 50 个汉字（含标点），宁可少一句，不要写长。
+【篇幅铁律】全文不超过 200 个汉字（含标点），宁可少一句，不要写长。
 
-请输出一段极短文字（不用 Markdown、不用条目）：
+请输出一段连贯文字（不用 Markdown、不用条目）：
 - 点笔记里一处原话或一个念头，具体肯定；再用一句追问或提示往深里想（不给标准答案、不下神学定论）。
-- 若笔记里明显有疑问（含？或「为什么/为何/怎么/吗/呢」等），在同一段里用「关于疑问：」开头加半句回应，**整段仍 ≤50 字**。
+- 若笔记里明显有疑问（含？或「为什么/为何/怎么/吗/呢」等），在同一段里用「关于疑问：」开头加半句回应，**整段仍 ≤200 字**。
 
 只输出正文，简短精悍。`;
 }
@@ -431,17 +428,24 @@ ${bookRagKnowledgeSection(input.knowledge)}
  * 选段配图：他自己挑的那几节，直接把原文交给画图模型。
  * 不绕"要素梳理"那一趟 —— 省掉一次 AI 调用（快一半），画出来也更贴合他圈的这几节。
  */
-export function imagePromptFromText(ref: string, text: string): string {
+export function imagePromptFromText(ref: string, text: string, style?: string): string {
+  const styleClause = imageStylePrompt(normalizeImageStyle(style));
   return `圣经场景插画，${ref}。
 经文：${text}
 照经文描述的场景作画，以其中最具画面感的一刻为主体。
-风格：古典油画质感，柔和暖色光线，庄重肃穆，写实但带诗意，广角构图，
+风格：${styleClause}，
 不出现任何文字、不出现现代物品、不描绘神的面容。`;
 }
 
-export function imagePromptFor(ref: string, thesis: string, places: string[]): string {
+export function imagePromptFor(
+  ref: string,
+  thesis: string,
+  places: string[],
+  style?: string,
+): string {
+  const styleClause = imageStylePrompt(normalizeImageStyle(style));
   return `圣经场景插画，${ref}。主题：${thesis}。
 场景元素：${places.join('、') || '古代近东旷野'}。
-风格：古典油画质感，柔和暖色光线，庄重肃穆，写实但带诗意，广角构图，
+风格：${styleClause}，
 不出现任何文字、不出现现代物品、不描绘神的面容。`;
 }

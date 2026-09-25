@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { api } from '@/lib/client';
 import { joinDictation, transcribe } from '@/lib/dictate';
 import Recorder from './Recorder';
@@ -33,7 +33,7 @@ function lastUsedInput(): Tab {
 }
 
 /** 改一条已记下的笔记时传进来 */
-export type NoteEdit = { id: number; content: string; godSpoke: boolean; readerReviewed?: boolean };
+export type NoteEdit = { id: number; content: string; readerReviewed?: boolean };
 
 export default function NoteSheet({
   target,
@@ -48,28 +48,16 @@ export default function NoteSheet({
   onClose: () => void;
   onSaved?: () => void;
 }) {
-  // 改旧笔记进「写下」；新开笔记记住上次 Tab，但不再自动开麦（微信须用户点按钮）
-  const [tab, setTab] = useState<Tab>(editing ? 'text' : lastUsedInput());
+  // 改旧笔记进「写下」；新开笔记记住上次 Tab；若上次是口述，长按打开后直接开麦
+  const initialTab: Tab = editing ? 'text' : lastUsedInput();
+  const autoStartMic = useRef(!editing && initialTab === 'audio');
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [text, setText] = useState(editing?.content ?? '');
-  const [godSpoke, setGodSpoke] = useState(editing?.godSpoke ?? false);
   const [busy, setBusy] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
-
   const ref = `${target.bookName} ${target.chapter}:${target.verse}`;
-
-  const godSpokeBox = (
-    <label className="flex items-center gap-2.5 py-1 text-sm">
-      <input
-        type="checkbox"
-        className="h-[18px] w-[18px] accent-brand-500"
-        checked={godSpoke}
-        onChange={(e) => setGodSpoke(e.target.checked)}
-      />
-      <span>这一节神对我说话</span>
-    </label>
-  );
 
   function pickTab(t: Tab) {
     setTab(t);
@@ -90,7 +78,7 @@ export default function NoteSheet({
     if (editing) {
       await api('/api/notes', {
         method: 'PATCH',
-        json: { id: editing.id, content, godSpoke },
+        json: { id: editing.id, content },
       });
       return;
     }
@@ -100,7 +88,6 @@ export default function NoteSheet({
         chapter: target.chapter,
         verse: target.verse,
         content,
-        godSpoke,
         devotionId: devotionId ?? null,
       },
     });
@@ -120,7 +107,7 @@ export default function NoteSheet({
   }
 
   async function saveText() {
-    if (!text.trim() && !godSpoke) {
+    if (!text.trim()) {
       setError('写点什么再保存吧');
       return;
     }
@@ -147,13 +134,8 @@ export default function NoteSheet({
     setTranscribing(true);
     try {
       const said = await transcribe(blob);
-      if (!said) {
-        setError('没听清，再说一次');
-        return;
-      }
-      // 万一他先打了半句又改用口述，两段都留下，不能把打的字冲掉
+      if (!said) throw new Error('没听清，再说一次');
       await saveNote(joinDictation(text, said));
-      // 留一眼确认听对了没有；这条笔记随后就显示在经文下面
       done(`已记下：${said.length > 18 ? `${said.slice(0, 18)}…` : said}`, 1400);
     } catch (err) {
       setError((err as Error).message);
@@ -207,7 +189,6 @@ export default function NoteSheet({
                 onChange={(e) => setText(e.target.value)}
                 autoFocus
               />
-              {godSpokeBox}
               <button className="btn-primary w-full py-3" onClick={saveText} disabled={busy}>
                 {busy ? '保存中…' : editing ? '改好了' : '保存笔记'}
               </button>
@@ -239,17 +220,23 @@ export default function NoteSheet({
 
           {tab === 'audio' && (
             <div className="space-y-1">
+              {transcribing && (
+                <p className="py-2 text-center text-xs text-brand-700">正在转成文字并保存…</p>
+              )}
               <Recorder
                 busy={transcribing}
                 onDone={speakToText}
+                autoStart={autoStartMic.current}
                 note={
                   editing
-                    ? '先点下方按钮开麦（微信里需手动点一下）· 说完点结束，接到这条笔记后面'
-                    : '先点下方按钮开麦（微信里需手动点一下）· 说完点结束，转成文字直接记下'
+                    ? autoStartMic.current
+                      ? '说完点结束，接到这条笔记后面'
+                      : '先点下方按钮开麦（微信里需手动点一下）· 说完点结束，接到这条笔记后面'
+                    : autoStartMic.current
+                      ? '说完点结束，转成文字直接记下'
+                      : '先点下方按钮开麦（微信里需手动点一下）· 说完点结束，转成文字直接记下'
                 }
               />
-              {/* 口述说完就直接入库，不再经过"写下"，这个勾选得在开口前就够得着 */}
-              <div className="px-1 pb-2">{godSpokeBox}</div>
             </div>
           )}
 

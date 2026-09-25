@@ -43,14 +43,14 @@ export async function GET(req: Request) {
   });
 }
 
-/** 文字笔记 / 标记"神对我说话" */
+/** 文字笔记 */
 export async function POST(req: Request) {
   return handler(async () => {
     const session = await requireSession();
 
     // 笔记一律以文字入库：口述先走 /api/transcribe 转成文字，这里不收任何上传文件
     const data = await body(req, TextNote);
-    if (!data.content && !data.godSpoke) bad('笔记内容不能为空');
+    if (!data.content) bad('笔记内容不能为空');
 
     const info = await db()
       .prepare(
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
         data.chapter,
         data.verse,
         data.content,
-        data.godSpoke ? 1 : 0,
+        0,
         data.devotionId ?? null,
       );
 
@@ -89,7 +89,7 @@ export async function PATCH(req: Request) {
   return handler(async () => {
     const session = await requireSession();
     const data = await body(req, EditNote);
-    if (!data.content && !data.godSpoke) bad('笔记内容不能为空');
+    if (!data.content) bad('笔记内容不能为空');
 
     // 先单独确认归属：MySQL 的 UPDATE 只报"真被改动的行数"，
     // 内容一字未改时是 0，拿它判断存在与否会误报 404
@@ -99,8 +99,8 @@ export async function PATCH(req: Request) {
     if (!own) throw new HttpError(404, '笔记不存在');
 
     await db()
-      .prepare(`UPDATE verse_notes SET content = ?, god_spoke = ? WHERE id = ? AND user_id = ?`)
-      .run(data.content, data.godSpoke ? 1 : 0, data.id, session.uid);
+      .prepare(`UPDATE verse_notes SET content = ? WHERE id = ? AND user_id = ?`)
+      .run(data.content, data.id, session.uid);
     return { ok: true };
   });
 }

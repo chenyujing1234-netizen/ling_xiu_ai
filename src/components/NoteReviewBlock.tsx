@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/client';
 import { NoteReviewedBadge } from '@/components/Ui';
 import RagSourcesFootnote from './RagSourcesFootnote';
 import SheetModal from './SheetModal';
+import { useBackgroundJobs } from './BackgroundJobsProvider';
 import type { RagSource } from '@/lib/rag-sources';
 
 function ReviewSheet({
@@ -44,18 +45,18 @@ export default function NoteReviewBlock({
 }: {
   noteId: number;
   refLabel: string;
-  /** 例如笔记未保存、无文字 */
   disabled?: boolean;
   compact?: boolean;
-  /** 服务端：当前正文已有缓存点评 */
   readerReviewed?: boolean;
 }) {
+  const { runJob } = useBackgroundJobs();
   const [open, setOpen] = useState(false);
   const [review, setReview] = useState<string | null>(null);
   const [ragSources, setRagSources] = useState<RagSource[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [reviewed, setReviewed] = useState(Boolean(readerReviewed));
+  const btnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     setReviewed(Boolean(readerReviewed));
@@ -64,27 +65,42 @@ export default function NoteReviewBlock({
   async function loadReview() {
     setErr('');
     setBusy(true);
-    try {
-      let res = await api<{ review: string | null; cached: boolean; ragSources?: RagSource[] }>(
-        `/api/notes/${noteId}/review?cacheOnly=1`,
-        { method: 'POST' },
-      );
-      if (!res.review?.trim()) {
-        res = await api<{ review: string | null; cached: boolean; ragSources?: RagSource[] }>(
-          `/api/notes/${noteId}/review`,
+
+    const rect = btnRef.current?.getBoundingClientRect();
+    const throwFrom = rect
+      ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+      : undefined;
+
+    const { promise } = runJob({
+      label: `笔记点评 ${refLabel}`,
+      throwFrom,
+      task: async () => {
+        let res = await api<{ review: string | null; cached: boolean; ragSources?: RagSource[] }>(
+          `/api/notes/${noteId}/review?cacheOnly=1`,
           { method: 'POST' },
         );
-      }
-      if (!res.review?.trim()) {
-        setErr('暂时无法生成点评，稍后再试');
-        return;
-      }
-      setReview(res.review);
-      setRagSources(res.ragSources ?? []);
-      setReviewed(true);
-      setOpen(true);
-    } catch (e) {
-      setErr((e as Error).message);
+        if (!res.review?.trim()) {
+          res = await api<{ review: string | null; cached: boolean; ragSources?: RagSource[] }>(
+            `/api/notes/${noteId}/review`,
+            { method: 'POST' },
+          );
+        }
+        if (!res.review?.trim()) throw new Error('暂时无法生成点评，稍后再试');
+        return res;
+      },
+      onSuccess: (res) => {
+        setReview(res.review!);
+        setRagSources(res.ragSources ?? []);
+        setReviewed(true);
+      },
+      onError: (e) => setErr(e.message),
+      present: () => setOpen(true),
+    });
+
+    try {
+      await promise;
+    } catch {
+      /* handled */
     } finally {
       setBusy(false);
     }
@@ -92,20 +108,26 @@ export default function NoteReviewBlock({
 
   return (
     <>
-      <div className={`flex items-center gap-1.5 ${compact ? 'mt-1' : 'mt-3'}`}>
-        {reviewed && !disabled && <NoteReviewedBadge />}
-        <button
-          type="button"
-          disabled={disabled || busy}
-          onClick={loadReview}
-          className={
-            compact
-              ? 'btn-secondary !w-auto self-start px-2.5 py-1 text-[11px]'
-              : 'btn-secondary flex-1 py-2.5'
-          }
-        >
-          {busy ? '陪读者在读你的笔记…' : reviewed ? '再看陪读者点评' : '陪读者点评'}
-        </button>
+      <div className={`flex flex-col gap-1.5 ${compact ? 'mt-1' : 'mt-3'}`}>
+        <div className="flex items-center gap-1.5">
+          {reviewed && !disabled && <NoteReviewedBadge />}
+          <button
+            ref={btnRef}
+            type="button"
+            disabled={disabled || busy}
+            onClick={() => void loadReview()}
+            className={
+              compact
+                ? 'btn-secondary !w-auto self-start px-2.5 py-1 text-[11px]'
+                : 'btn-secondary flex-1 py-2.5'
+            }
+          >
+            {busy ? '后台生成中…' : reviewed ? '再看陪读者点评' : '陪读者点评'}
+          </button>
+        </div>
+        {busy && (
+          <p className="text-[10px] text-brand-700">请看右上角红点袋，完成后会自动弹出点评</p>
+        )}
       </div>
       {err && <p className="mt-1 text-[11px] text-accent">{err}</p>}
       {open && review && (

@@ -235,6 +235,12 @@ CREATE TABLE IF NOT EXISTS sermon_resources (
 );
 CREATE INDEX IF NOT EXISTS idx_res_ref ON sermon_resources(book_id, chapter);
 
+CREATE TABLE IF NOT EXISTS app_settings (
+  k          TEXT PRIMARY KEY,
+  v          TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
 -- ========== 可选知识库（讲道稿/书摘），供出题取材 R-E3 ==========
 CREATE TABLE IF NOT EXISTS knowledge_docs (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,

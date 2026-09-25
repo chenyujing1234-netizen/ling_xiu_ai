@@ -259,6 +259,13 @@ CREATE TABLE IF NOT EXISTS sermon_resources (
   CONSTRAINT fk_res_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 全站键值配置（如 LLM 固定检索哪些 book_rag 知识库）
+CREATE TABLE IF NOT EXISTS app_settings (
+  k          VARCHAR(64) NOT NULL PRIMARY KEY,
+  v          TEXT        NOT NULL,
+  updated_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ========== 可选知识库（讲道稿/书摘），供出题取材 R-E3 ==========
 CREATE TABLE IF NOT EXISTS knowledge_docs (
   id         INT NOT NULL AUTO_INCREMENT PRIMARY KEY,

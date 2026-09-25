@@ -12,6 +12,7 @@ import { getBook, getRange, passageText, refKey, refLabel, contextWindow, getVer
 import { saveSceneImage } from './media';
 import { parseRagSources, serializeRagSources, type RagSource } from './rag-sources';
 import { knowledgeForLlm } from './knowledge-context';
+import { imageInsightCacheKind, normalizeImageStyle } from './image-styles';
 
 // ---------- 类型 ----------
 
@@ -98,13 +99,14 @@ export async function isCached(
   bookId: number,
   chapter: number,
   kind: string,
-  opts: { from?: number; to?: number; verse?: number } = {},
+  opts: { from?: number; to?: number; verse?: number; imageStyle?: string } = {},
 ): Promise<boolean> {
   const key =
     opts.verse !== undefined
       ? contextKey(bookId, chapter, opts.verse)
       : (await resolveRange(bookId, chapter, opts.from ?? 1, opts.to ?? 0)).key;
-  return (await readCache(key, kind)) !== null;
+  const cacheKind = kind === 'image' ? imageInsightCacheKind(opts.imageStyle) : kind;
+  return (await readCache(key, cacheKind)) !== null;
 }
 
 /** 只读缓存（含 RAG 引用来源），不触发 AI */
@@ -112,15 +114,16 @@ export async function readCachedInsight<T>(
   bookId: number,
   chapter: number,
   kind: string,
-  opts: { from?: number; to?: number; verse?: number } = {},
+  opts: { from?: number; to?: number; verse?: number; imageStyle?: string } = {},
 ): Promise<InsightResult<T> | null> {
   const key =
     opts.verse !== undefined
       ? contextKey(bookId, chapter, opts.verse)
       : (await resolveRange(bookId, chapter, opts.from ?? 1, opts.to ?? 0)).key;
-  const data = await readCache<T>(key, kind);
+  const cacheKind = kind === 'image' ? imageInsightCacheKind(opts.imageStyle) : kind;
+  const data = await readCache<T>(key, cacheKind);
   if (!data) return null;
-  return { data, ragSources: await readRagSources(key, kind) };
+  return { data, ragSources: await readRagSources(key, cacheKind) };
 }
 
 export type InsightResult<T> = { data: T; ragSources: RagSource[] };
@@ -320,11 +323,17 @@ export async function getSceneImage(
   chapter: number,
   from = 1,
   to = 0,
+  imageStyle?: string,
+  force = false,
 ): Promise<{ url: string | null }> {
+  const style = normalizeImageStyle(imageStyle);
+  const cacheKind = imageInsightCacheKind(style);
   const r = await resolveRange(bookId, chapter, from, to);
-  const hit = await readCache<{ url: string | null }>(r.key, 'image');
-  // 只认落地后的本站地址；早期缓存过的外部临时链接已失效，重新生成
-  if (hit?.url?.startsWith('/')) return hit;
+  if (!force) {
+    const hit = await readCache<{ url: string | null }>(r.key, cacheKind);
+    // 只认落地后的本站地址；早期缓存过的外部临时链接已失效，重新生成
+    if (hit?.url?.startsWith('/')) return hit;
+  }
   if (!MODELS.image()) return { url: null };
 
   // 他自己圈的一小段：原文本来就短，直接交给画图模型 —— 比先跑一遍要素梳理快一半，
@@ -334,7 +343,7 @@ export async function getSceneImage(
 
   let prompt: string;
   if (isPick) {
-    prompt = imagePromptFromText(r.label, text);
+    prompt = imagePromptFromText(r.label, text, style);
   } else {
     let thesis = r.label;
     let places: string[] = [];
@@ -345,12 +354,12 @@ export async function getSceneImage(
     } catch {
       /* 没有 elements 也能出图，只是提示词弱一些 */
     }
-    prompt = imagePromptFor(r.label, thesis, places);
+    prompt = imagePromptFor(r.label, thesis, places, style);
   }
   const remote = await generateImage(prompt);
   if (!remote) return { url: null };
 
   const payload = { url: await persistImage(remote) };
-  await writeCache(r.key, 'image', payload, MODELS.image());
+  await writeCache(r.key, cacheKind, payload, MODELS.image());
   return payload;
 }

@@ -23,6 +23,7 @@ import {
   type Stage,
   type FeedbackStage,
 } from '@/lib/devotion';
+import { clampNoteReviewLength } from '@/lib/note-review';
 import { parseRagSources } from '@/lib/rag-sources';
 import { db } from '@/lib/db';
 
@@ -165,7 +166,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           const hash = await stageContentFingerprint(fresh, fromStage);
           const cached = await getCachedStageFeedback(fresh.id, fbStage);
           if (cached && cached.content_hash === hash && cached.feedback.trim()) {
-            feedback = cached.feedback;
+            feedback = clampNoteReviewLength(cached.feedback);
             feedbackSkipped = true;
             feedbackRagSources = parseRagSources(cached.rag_sources);
           } else {

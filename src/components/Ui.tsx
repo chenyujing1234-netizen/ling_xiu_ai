@@ -155,6 +155,33 @@ export function NoteReviewedBadge({ className }: { className?: string }) {
   );
 }
 
+/** 经节旁：生成本节配图（需阻止冒泡，避免触发长按） */
+export function VerseImageButton({
+  onClick,
+  disabled,
+  className,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={`ml-1.5 inline-flex shrink-0 align-middle items-center rounded-md border border-brand-200/90 bg-brand-50/80 px-1.5 py-0.5 text-[10px] font-bold leading-none text-brand-700 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40 ${className ?? ''}`}
+      aria-label="为本节生成配图"
+    >
+      配图
+    </button>
+  );
+}
+
 /** 经节末尾：提醒可长按记笔记（仅图标，不参与点击） */
 export function VerseLongPressHint({ className }: { className?: string }) {
   return (

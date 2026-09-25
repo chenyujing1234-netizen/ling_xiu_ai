@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { canUseInPageRecorder, isWeChatBrowser } from '@/lib/recorder-capability';
+import { noteRecordingEntered, noteRecordingLeft } from '@/lib/note-recording-guard';
 
 const MAX_MS = 120_000;
 const MIN_MS = 500;
@@ -10,10 +11,12 @@ export default function Recorder({
   onDone,
   busy,
   note,
+  autoStart,
 }: {
   onDone: (blob: Blob) => void;
   busy?: boolean;
   note?: string;
+  /** 挂载后自动开麦（须在同一用户手势链路上打开面板，如长按记笔记） */
   autoStart?: boolean;
 }) {
   const useInPage = canUseInPageRecorder();
@@ -58,6 +61,12 @@ export default function Recorder({
   }, [clearTimer]);
 
   useEffect(() => () => teardown(), [teardown]);
+
+  useEffect(() => {
+    if (state !== 'starting' && state !== 'recording') return;
+    noteRecordingEntered();
+    return () => noteRecordingLeft();
+  }, [state]);
 
   const beginRecording = useCallback(async () => {
     if (busy || stateRef.current !== 'idle') return;
@@ -135,6 +144,11 @@ export default function Recorder({
       }
     }, 100);
   }, [busy, onDone, stop]);
+
+  useEffect(() => {
+    if (!autoStart || !useInPage || busy) return;
+    void beginRecording();
+  }, [autoStart, useInPage, busy, beginRecording]);
 
   function onTap() {
     if (busy) return;

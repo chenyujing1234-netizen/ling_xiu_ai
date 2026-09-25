@@ -115,8 +115,7 @@ export async function reviewChapterNotes(
   const ref = `${book.name_cn} ${chapter}章`;
   const notesBlock = notes
     .map((n) => {
-      const spoke = n.god_spoke ? ' · 标记「神对我说话」' : '';
-      return `${n.verse}节${spoke}：${n.content.trim()}`;
+      return `${n.verse}节：${n.content.trim()}`;
     })
     .join('\n');
   const focus = notes.map((n) => n.content).join('\n');

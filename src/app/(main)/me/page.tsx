@@ -23,7 +23,7 @@ export default async function MePage() {
     {
       href: '/me/notes',
       label: '我的读经笔记',
-      desc: `${s.totalNotes} 条 · ${s.godSpokeCount} 处神对我说话`,
+      desc: `${s.totalNotes} 条`,
       icon: <IconNotes size={20} />,
     },
     {

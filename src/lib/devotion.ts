@@ -21,6 +21,7 @@ import { resolveRange } from './insights';
 import { passageText } from './bible';
 import { knowledgeForLlm } from './knowledge-context';
 import { parseRagSources, serializeRagSources, type RagSource } from './rag-sources';
+import { clampNoteReviewLength } from './note-review';
 
 export { STAGES, STAGE_META, type Stage } from './devotion-stages';
 import { STAGES, type Stage } from './devotion-stages';
@@ -336,7 +337,7 @@ export async function stageFeedbacksMap(
     .all<{ stage: FeedbackStage; feedback: string }>(devotionId);
   const out: Partial<Record<FeedbackStage, string>> = {};
   for (const r of rows) {
-    if (r.feedback?.trim()) out[r.stage] = r.feedback;
+    if (r.feedback?.trim()) out[r.stage] = clampNoteReviewLength(r.feedback);
   }
   return out;
 }
@@ -452,13 +453,15 @@ export async function stageFeedback(
           }),
         },
       ],
-      { model: MODELS.fast(), maxTokens: 550, temperature: 0.72 },
+      { model: MODELS.fast(), maxTokens: 480, temperature: 0.72 },
     );
-    return { feedback, ragSources: ctx.ragSources };
+    return { feedback: clampNoteReviewLength(feedback), ragSources: ctx.ragSources };
   } catch (err) {
     logDegrade(`阶段点评(${fromStage})`, err);
     return {
-      feedback: fallbackStageFeedback(stageKey, userContent.replace(/（引导阶段.*?）/, '')),
+      feedback: clampNoteReviewLength(
+        fallbackStageFeedback(stageKey, userContent.replace(/（引导阶段.*?）/, '')),
+      ),
       ragSources: [],
     };
   }

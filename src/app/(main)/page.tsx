@@ -179,14 +179,6 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         </Link>
       </section>
 
-      {summary.godSpokeCount > 0 && (
-        <p className="mt-4 text-center text-xs text-muted">
-          你已标记 {summary.godSpokeCount} 处「神对我说话」·{' '}
-          <Link href="/me/notes" className="text-brand-500">
-            回看
-          </Link>
-        </p>
-      )}
     </div>
   );
 }

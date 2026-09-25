@@ -9,11 +9,13 @@ import {
   IconLongPress,
   IconScripture,
   NoteReviewedBadge,
+  VerseImageButton,
   VerseLongPressHint,
 } from '@/components/Ui';
 import { joinDictation } from '@/lib/dictate';
 import Dictate from './Dictate';
 import NoteSheet, { type NoteEdit, type VerseTarget } from './NoteSheet';
+import VerseImageSheet from './VerseImageSheet';
 import PageBackButton from './PageBackButton';
 import SheetModal from './SheetModal';
 import ChapterNotesReviewBlock from './ChapterNotesReviewBlock';
@@ -21,6 +23,8 @@ import NoteReviewBlock from './NoteReviewBlock';
 import Waiting from './Waiting';
 import RagSourcesFootnote from './RagSourcesFootnote';
 import type { RagSource } from '@/lib/rag-sources';
+import { useBackgroundJobs } from './BackgroundJobsProvider';
+import { DEVOTION_AI_ACTIONS, DEVOTION_AI_LABELS } from '@/lib/background-ai';
 const LONG_PRESS_MS = 450;
 
 const FEEDBACK_STAGE_TITLE: Record<string, string> = {
@@ -115,6 +119,12 @@ export default function DevotionFlow({ id }: { id: number }) {
   const [d, setD] = useState<Detail | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const { runJob } = useBackgroundJobs();
+  const feedbackPresentRef = useRef<{
+    from: string;
+    text: string;
+    ragSources?: RagSource[];
+  } | null>(null);
   const [stageFeedback, setStageFeedback] = useState<{
     from: string;
     text: string;
@@ -152,33 +162,62 @@ export default function DevotionFlow({ id }: { id: number }) {
 
   const act = useCallback(
     async <T,>(payload: Record<string, unknown>): Promise<T | null> => {
-      setBusy(true);
-      setError('');
-      try {
-        const res = await api<T>(`/api/devotion/${id}/action`, { json: payload });
-        await load();
-        if (payload.action === 'advance') {
-          const adv = res as AdvanceResult | null;
-          if (adv?.feedback?.trim() && !adv.feedbackSkipped) {
-            const from = adv.feedbackFor
-              ? FEEDBACK_STAGE_TITLE[adv.feedbackFor] ?? adv.feedbackFor
-              : '这一步';
-            setStageFeedback({
-              from,
-              text: adv.feedback.trim(),
-              ragSources: adv.feedbackRagSources,
-            });
+      const action = String(payload.action ?? '');
+      const useBg = DEVOTION_AI_ACTIONS.has(action);
+
+      const execute = async (): Promise<T | null> => {
+        setError('');
+        try {
+          const res = await api<T>(`/api/devotion/${id}/action`, { json: payload });
+          await load();
+          if (payload.action === 'advance') {
+            const adv = res as AdvanceResult | null;
+            if (adv?.feedback?.trim() && !adv.feedbackSkipped) {
+              const from = adv.feedbackFor
+                ? FEEDBACK_STAGE_TITLE[adv.feedbackFor] ?? adv.feedbackFor
+                : '这一步';
+              const fb = {
+                from,
+                text: adv.feedback.trim(),
+                ragSources: adv.feedbackRagSources,
+              };
+              feedbackPresentRef.current = fb;
+              setStageFeedback(fb);
+            }
           }
+          return res;
+        } catch (err) {
+          setError((err as Error).message);
+          return null;
         }
-        return res;
-      } catch (err) {
-        setError((err as Error).message);
-        return null;
+      };
+
+      setBusy(true);
+
+      if (useBg) {
+        const label = DEVOTION_AI_LABELS[action] ?? '灵修生成';
+        const { promise } = runJob({
+          label: `灵修 · ${label}`,
+          task: execute,
+          present: () => {
+            const fb = feedbackPresentRef.current;
+            if (fb) setStageFeedback(fb);
+          },
+        });
+        try {
+          return await promise;
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      try {
+        return await execute();
       } finally {
         setBusy(false);
       }
     },
-    [id, load],
+    [id, load, runJob],
   );
 
   /** 自动保存输入：不占用全局 busy，避免输入时整页锁住 */
@@ -318,10 +357,24 @@ export default function DevotionFlow({ id }: { id: number }) {
           <InquireStage d={d} act={act} sync={sync} busy={busy} reload={load} onViewSavedFeedback={onViewSavedFeedback} />
         )}
         {stage === 'reflect' && (
-          <ReflectStage d={d} act={act} sync={sync} busy={busy} reload={load} onViewSavedFeedback={onViewSavedFeedback} />
+          <ReflectStage
+            d={d}
+            act={act}
+            sync={sync}
+            busy={busy}
+            reload={load}
+            onViewSavedFeedback={onViewSavedFeedback}
+          />
         )}
         {stage === 'guided' && (
-          <GuidedStage d={d} act={act} sync={sync} busy={busy} reload={load} onViewSavedFeedback={onViewSavedFeedback} />
+          <GuidedStage
+            d={d}
+            act={act}
+            sync={sync}
+            busy={busy}
+            reload={load}
+            onViewSavedFeedback={onViewSavedFeedback}
+          />
         )}
         {stage === 'life' && (
           <LifeStage d={d} act={act} sync={sync} busy={busy} reload={load} onViewSavedFeedback={onViewSavedFeedback} />
@@ -331,6 +384,7 @@ export default function DevotionFlow({ id }: { id: number }) {
         )}
         {stage === 'done' && <DoneStage d={d} />}
       </div>
+
     </div>
   );
 }
@@ -406,6 +460,7 @@ function Passage({
 }) {
   const [open, setOpen] = useState(true);
   const [target, setTarget] = useState<VerseTarget | null>(null);
+  const [imageTarget, setImageTarget] = useState<VerseTarget | null>(null);
   const [editing, setEditing] = useState<NoteEdit | null>(null);
   const [pressing, setPressing] = useState<number | null>(null);
 
@@ -500,8 +555,8 @@ function Passage({
             <div className="flex items-start gap-2.5 rounded-xl border border-brand-100 bg-brand-50/90 px-3 py-2.5">
               <IconLongPress className="mt-0.5 shrink-0 text-brand-500" />
               <p className="text-[12px] leading-relaxed text-brand-700">
-                <span className="font-semibold">长按</span>任意一节经文，可{' '}
-                <span className="font-medium">口述 / 写文字笔记</span>，或标记「神对我说话」
+                <span className="font-semibold">长按</span>任意一节可{' '}
+                <span className="font-medium">口述 / 写文字笔记</span>；点经节旁「配图」生成本节画面
               </p>
             </div>
           </div>
@@ -524,7 +579,6 @@ function Passage({
           >
             {verses.map((v) => {
               const verseNotes = notesByVerse.get(v.verse) ?? [];
-              const spoke = verseNotes.some((n) => n.god_spoke);
               return (
                 <div
                   key={v.verse}
@@ -550,9 +604,9 @@ function Passage({
                   onContextMenu={(e) => e.preventDefault()}
                   className={`no-select rounded-lg px-2 py-1.5 transition ${
                     pressing === v.verse ? 'bg-brand-100' : ''
-                  } ${spoke ? 'border-l-[3px] border-accent bg-accent/[0.04]' : ''}`}
+                  }`}
                 >
-                  <p className={`scripture text-[15px] ${spoke ? 'text-accent' : ''}`}>
+                  <p className="scripture text-[15px]">
                     <sup className="mr-1 select-none align-super text-[11px] font-medium text-brand-300">
                       {v.verse}
                     </sup>
@@ -566,6 +620,18 @@ function Passage({
                         )}
                       </span>
                     )}
+                    <VerseImageButton
+                      onClick={() =>
+                        setImageTarget({
+                          bookId,
+                          bookName,
+                          chapter,
+                          verse: v.verse,
+                          cn: v.cn,
+                          en: v.en ?? '',
+                        })
+                      }
+                    />
                     <VerseLongPressHint />
                   </p>
                   {verseNotes
@@ -589,7 +655,6 @@ function Passage({
                                 setEditing({
                                   id: n.id,
                                   content: n.content,
-                                  godSpoke: !!n.god_spoke,
                                   readerReviewed: n.readerReviewed,
                                 });
                               }}
@@ -630,6 +695,14 @@ function Passage({
             setEditing(null);
           }}
           onSaved={onNotesChange}
+        />
+      )}
+
+      {imageTarget && (
+        <VerseImageSheet
+          target={imageTarget}
+          onClose={() => setImageTarget(null)}
+          onReopen={(t) => setImageTarget(t)}
         />
       )}
     </section>
@@ -768,7 +841,10 @@ function NextButton({
   );
 }
 
-/** 浮动「考一考」：滚到答题区并聚焦，始终浮在底部 Tab 上方 */
+/** 答题区顶边越过「距视口底边此高度」的线即隐藏（越大越早隐藏，且须已露出） */
+const QUIZ_FLOAT_HIDE_MARGIN_FROM_BOTTOM = 36;
+
+/** 浮动「考一考」：滚到答题区并聚焦；已在考一考区域时不再显示 */
 function QuizMeButton({
   targetRef,
   disabled,
@@ -776,9 +852,80 @@ function QuizMeButton({
   targetRef: React.RefObject<HTMLElement | null>;
   disabled?: boolean;
 }) {
+  const [answerZoneVisible, setAnswerZoneVisible] = useState(false);
+
+  useEffect(() => {
+    setAnswerZoneVisible(false);
+    let ro: ResizeObserver | undefined;
+    const scrollRoots = new Set<EventTarget>();
+
+    const measure = () => {
+      const el = targetRef.current;
+      if (!el) return;
+      const { top, bottom } = el.getBoundingClientRect();
+      const vh = window.innerHeight;
+      if (top >= vh || bottom <= 0) {
+        setAnswerZoneVisible(false);
+        return;
+      }
+      const hideLine = vh - QUIZ_FLOAT_HIDE_MARGIN_FROM_BOTTOM;
+      // 答题区已露出，且顶边进入屏幕下沿一带就藏（不必滚到中部）
+      setAnswerZoneVisible(top < hideLine);
+    };
+
+    const onScroll = () => measure();
+
+    const bindScroll = (el: HTMLElement) => {
+      let node: HTMLElement | null = el;
+      while (node) {
+        if (!scrollRoots.has(node)) {
+          scrollRoots.add(node);
+          node.addEventListener('scroll', onScroll, { passive: true });
+        }
+        node = node.parentElement;
+      }
+      if (!scrollRoots.has(window)) {
+        scrollRoots.add(window);
+        window.addEventListener('scroll', onScroll, { passive: true, capture: true });
+      }
+    };
+
+    const unbindScroll = () => {
+      for (const t of scrollRoots) {
+        if (t === window) window.removeEventListener('scroll', onScroll, true);
+        else (t as HTMLElement).removeEventListener('scroll', onScroll);
+      }
+      scrollRoots.clear();
+    };
+
+    const attach = () => {
+      const el = targetRef.current;
+      if (!el) return false;
+      measure();
+      bindScroll(el);
+      ro = new ResizeObserver(measure);
+      ro.observe(el);
+      return true;
+    };
+
+    if (!attach()) {
+      const t = window.setTimeout(() => attach(), 0);
+      return () => {
+        window.clearTimeout(t);
+        unbindScroll();
+        ro?.disconnect();
+      };
+    }
+    return () => {
+      unbindScroll();
+      ro?.disconnect();
+    };
+  }, [targetRef]);
+
   function go() {
     targetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     window.setTimeout(() => {
+      setAnswerZoneVisible(true);
       const el = targetRef.current?.querySelector('textarea, input:not([type=checkbox])') as
         | HTMLTextAreaElement
         | HTMLInputElement
@@ -786,6 +933,8 @@ function QuizMeButton({
       el?.focus({ preventScroll: true });
     }, 320);
   }
+
+  if (answerZoneVisible) return null;
 
   return (
     <button
@@ -865,6 +1014,7 @@ function StageFeedbackSheet({
 // ---------- 1. 观察 ----------
 
 function ObserveStage({ d, act, sync, busy, reload, onViewSavedFeedback }: StageProps) {
+  const { runJob } = useBackgroundJobs();
   const [nudges, setNudges] = useState<string[] | null>(null);
   const [nudgeBusy, setNudgeBusy] = useState(false);
   const { readingCompact, onVerseScroll } = useReadingCompact();
@@ -879,11 +1029,20 @@ function ObserveStage({ d, act, sync, busy, reload, onViewSavedFeedback }: Stage
 
   async function askForHelp() {
     setNudgeBusy(true);
+    const { promise } = runJob({
+      label: '观察参考题',
+      task: () =>
+        api<{ questions: string[] }>(
+          `/api/devotion/nudge?book=${d.devotion.book_id}&chapter=${d.devotion.chapter}`,
+        ),
+      onSuccess: (res) => setNudges(res.questions),
+      present: () => {
+        /* 结果已写入 nudges，滚到参考题区域 */
+        document.querySelector('[data-nudge-panel]')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      },
+    });
     try {
-      const res = await api<{ questions: string[] }>(
-        `/api/devotion/nudge?book=${d.devotion.book_id}&chapter=${d.devotion.chapter}`,
-      );
-      setNudges(res.questions);
+      await promise;
     } finally {
       setNudgeBusy(false);
     }
@@ -939,7 +1098,7 @@ function ObserveStage({ d, act, sync, busy, reload, onViewSavedFeedback }: Stage
         </div>
 
         {/* R-D5 兜底参考题 */}
-        <div className="mt-4 border-t border-line pt-3">
+        <div className="mt-4 border-t border-line pt-3" data-nudge-panel>
           {!nudges ? (
             <button
               type="button"
@@ -1204,7 +1363,9 @@ function ReflectStage({ d, act, sync, busy, reload, onViewSavedFeedback }: Stage
         </div>
       )}
 
-      {loadingPrompts && <Waiting text="正在为你出题…" expect="通常 20-40 秒" />}
+      {loadingPrompts && (
+        <p className="mb-3 text-center text-xs text-brand-700">正在后台出题，请看右上角红点袋</p>
+      )}
 
       <QuizMeButton targetRef={answerRef} disabled={!loadingPrompts && !d.prompts.length} />
 
@@ -1329,6 +1490,7 @@ function ScoreCard({
 // ---------- 4. 引导揭晓 + 对话 ----------
 
 function GuidedStage({ d, act, busy, reload, onViewSavedFeedback }: StageProps) {
+  const { runJob } = useBackgroundJobs();
   const { readingCompact, onVerseScroll } = useReadingCompact();
   const [text, setTextInternal] = useState('');
   const [coachSending, setCoachSending] = useState(false);
@@ -1382,9 +1544,11 @@ function GuidedStage({ d, act, busy, reload, onViewSavedFeedback }: StageProps) 
     requested.current = true;
     let cancelled = false;
 
-    (async () => {
-      setPhase('thinking');
-      try {
+    const { promise } = runJob({
+      label: '灵修 · 引导',
+      task: async () => {
+        if (cancelled) return;
+        setPhase('thinking');
         const res = await fetch(`/api/devotion/${d.devotion.id}/guide-stream`, { method: 'POST' });
         if (!res.ok || !res.body) {
           const info = await res.json().catch(() => ({ error: '引导生成失败' }));
@@ -1417,19 +1581,25 @@ function GuidedStage({ d, act, busy, reload, onViewSavedFeedback }: StageProps) 
             }
           }
         }
-        if (!cancelled) await reload(); // 让落库后的消息进入正式列表
-      } catch (err) {
+        if (!cancelled) await reload();
+      },
+      onError: (err) => {
         if (!cancelled) {
-          setStreamError((err as Error).message);
+          setStreamError(err.message);
           setPhase('idle');
         }
-      }
-    })();
+      },
+      present: () => {
+        answerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      },
+    });
+
+    void promise.catch(() => {});
 
     return () => {
       cancelled = true;
     };
-  }, [coachMsgs.length, d.devotion.id, reload]);
+  }, [coachMsgs.length, d.devotion.id, reload, runJob]);
 
   return (
     <div>
@@ -1453,7 +1623,7 @@ function GuidedStage({ d, act, busy, reload, onViewSavedFeedback }: StageProps) 
       )}
 
       {phase === 'thinking' && !streaming && (
-        <Waiting text="陪读者正在读你写下的每一句…" expect="它在默想，通常 30-90 秒开始回应" />
+        <p className="mb-3 text-center text-xs text-brand-700">引导在后台生成，请看右上角红点袋</p>
       )}
 
       {/* 流式文本：还没落库前先显示这一份 */}

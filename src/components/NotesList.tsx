@@ -35,10 +35,7 @@ export default function NotesList({ notes }: { notes: NoteItem[] }) {
                 </Link>
                 {n.readerReviewed && n.content?.trim() && <NoteReviewedBadge />}
               </div>
-              <span className="text-[11px] text-muted">
-                {n.god_spoke ? '✦ 神对我说话 · ' : ''}
-                {n.created_at.slice(5, 16)}
-              </span>
+              <span className="text-[11px] text-muted">{n.created_at.slice(5, 16)}</span>
             </div>
 
             {n.content && <p className="text-[14px] leading-relaxed">{n.content}</p>}

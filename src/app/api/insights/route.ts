@@ -42,9 +42,11 @@ export async function GET(req: Request) {
 
     const from = intParam(req, 'from', 1);
     const to = intParam(req, 'to', 0);
+    const imageStyle = url.searchParams.get('style') ?? undefined;
+    const imageRefresh = url.searchParams.get('refresh') === '1';
 
     if (cacheOnly && kind !== 'meta') {
-      const hit = await readCachedInsight(bookId, chapter, kind, { from, to });
+      const hit = await readCachedInsight(bookId, chapter, kind, { from, to, imageStyle });
       if (!hit) return { kind, data: null };
       if (kind === 'elements') {
         const unlocked = await hasUnlocked(session.uid, bookId, chapter);
@@ -85,7 +87,10 @@ export async function GET(req: Request) {
         return { kind, data: m.data, ragSources: m.ragSources };
       }
       case 'image':
-        return { kind, data: await getSceneImage(bookId, chapter, from, to) };
+        return {
+          kind,
+          data: await getSceneImage(bookId, chapter, from, to, imageStyle, imageRefresh),
+        };
       case 'meta':
         return { kind, data: await resolveRange(bookId, chapter, from, to) };
       default:

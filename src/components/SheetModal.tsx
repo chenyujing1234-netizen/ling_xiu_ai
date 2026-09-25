@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { SheetCloseButton } from '@/components/Ui';
+import { useBindOverlayHistory } from '@/lib/overlay-history';
 
 /**
  * 底部弹层挂到 body，避免被父级 overflow/transform 裁切（微信里长按笔记曾因此「看不见面板」）。
@@ -22,6 +23,8 @@ export default function SheetModal({
   className?: string;
   closeDisabled?: boolean;
 }) {
+  useBindOverlayHistory(true, onClose);
+
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';

@@ -20,7 +20,7 @@ type NoteRow = {
   book_name: string;
 };
 
-const NOTE_REVIEW_MAX_CHARS = 50;
+const NOTE_REVIEW_MAX_CHARS = 200;
 
 /** 笔记点评硬性上限（汉字按码点计） */
 export function clampNoteReviewLength(text: string): string {
@@ -156,12 +156,11 @@ export async function reviewVerseNote(
             ref,
             verseText,
             noteContent: text,
-            godSpoke: !!note.god_spoke,
             knowledge: ctx.knowledge,
           }),
         },
       ],
-      { model: MODELS.fast(), maxTokens: 160, temperature: 0.65 },
+      { model: MODELS.fast(), maxTokens: 480, temperature: 0.65 },
     );
   } catch (err) {
     console.warn(`[ai:degraded] 笔记点评: ${(err as Error)?.message ?? String(err)}`);

@@ -11,6 +11,7 @@ import SubpageBackBar from '@/components/SubpageBackBar';
 import ThemeSync from '@/components/ThemeSync';
 import { normalizeFontScale } from '@/lib/font-scale';
 import OnboardingGuide from '@/components/OnboardingGuide';
+import { BackgroundJobsProvider } from '@/components/BackgroundJobsProvider';
 import { normalizeTheme } from '@/lib/themes';
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
@@ -27,6 +28,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   const showOnboarding = !settings.guide_seen;
 
   return (
+    <BackgroundJobsProvider>
     <AdminPendingProvider isAdmin={isAdmin} initialPending={pendingRequests}>
       <OnboardingGuide
         show={showOnboarding}
@@ -45,5 +47,6 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       </main>
       <BottomTab />
     </AdminPendingProvider>
+    </BackgroundJobsProvider>
   );
 }

@@ -4,9 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/client';
 import NoteSheet, { type NoteEdit, type VerseTarget } from './NoteSheet';
+import VerseImageSheet from './VerseImageSheet';
 import SceneImageBar from './SceneImageBar';
 import BookPicker, { type BookBrief } from './BookPicker';
-import { NoteReviewedBadge, VerseLongPressHint } from './Ui';
+import { NoteReviewedBadge, VerseImageButton, VerseLongPressHint } from './Ui';
 
 type Verse = { book_id: number; chapter: number; verse: number; cn: string; en: string };
 type Note = {
@@ -56,6 +57,7 @@ export default function Reader({
   const [error, setError] = useState('');
   const [bilingual, setBilingual] = useState(false);
   const [target, setTarget] = useState<VerseTarget | null>(null);
+  const [imageTarget, setImageTarget] = useState<VerseTarget | null>(null);
   const [editing, setEditing] = useState<NoteEdit | null>(null);
   const [pressing, setPressing] = useState<number | null>(null);
   const [picker, setPicker] = useState(false);
@@ -238,7 +240,7 @@ export default function Reader({
           ) : (
             <>
               <p className="text-[11px] leading-snug text-muted">
-                长按任意一节 → 口述 / 写下笔记
+                长按记笔记 · 点经节旁「配图」生成本节画面
               </p>
               <button type="button" onClick={() => setPicking(true)} className="btn-ghost shrink-0 px-2 py-1 text-[11px]">
                 选段配图
@@ -257,7 +259,6 @@ export default function Reader({
           <div className="space-y-1">
             {data.verses.map((v) => {
               const notes = notesByVerse.get(v.verse) ?? [];
-              const spoke = notes.some((n) => n.god_spoke);
               const inRange = range !== null && v.verse >= range.from && v.verse <= range.to;
               return (
                 <div
@@ -271,9 +272,9 @@ export default function Reader({
                   onContextMenu={(e) => e.preventDefault()}
                   className={`no-select rounded-lg px-2 py-1.5 transition ${
                     pressing === v.verse ? 'bg-brand-100' : ''
-                  } ${spoke ? 'border-l-[3px] border-accent bg-accent/[0.04]' : ''} ${
-                    inRange ? 'bg-brand-100 ring-1 ring-brand-300' : ''
-                  } ${picking ? 'cursor-pointer' : ''}`}
+                  } ${inRange ? 'bg-brand-100 ring-1 ring-brand-300' : ''} ${
+                    picking ? 'cursor-pointer' : ''
+                  }`}
                 >
                   <p className="scripture">
                     <sup className="mr-1 select-none align-super text-[11px] font-medium text-brand-300">
@@ -289,7 +290,23 @@ export default function Reader({
                         )}
                       </span>
                     )}
-                    {!picking && <VerseLongPressHint />}
+                    {!picking && (
+                      <>
+                        <VerseImageButton
+                          onClick={() =>
+                            setImageTarget({
+                              bookId: data.book.id,
+                              bookName: data.book.name_cn,
+                              chapter: data.chapter,
+                              verse: v.verse,
+                              cn: v.cn,
+                              en: v.en,
+                            })
+                          }
+                        />
+                        <VerseLongPressHint />
+                      </>
+                    )}
                   </p>
                   {bilingual && v.en && (
                     <p className="mt-1 pl-4 text-[13px] leading-relaxed text-muted">{v.en}</p>
@@ -317,7 +334,6 @@ export default function Reader({
                               setEditing({
                                 id: n.id,
                                 content: n.content,
-                                godSpoke: !!n.god_spoke,
                                 readerReviewed: n.readerReviewed,
                               });
                             }}
@@ -428,6 +444,14 @@ export default function Reader({
             setEditing(null);
           }}
           onSaved={load}
+        />
+      )}
+
+      {imageTarget && (
+        <VerseImageSheet
+          target={imageTarget}
+          onClose={() => setImageTarget(null)}
+          onReopen={(t) => setImageTarget(t)}
         />
       )}
     </div>

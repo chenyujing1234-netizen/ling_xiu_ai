@@ -46,6 +46,21 @@ if (!fbTable.c) {
   console.log('  · 已创建 devotion_stage_feedback 表');
 }
 
+const [[appSettingsTable]] = await conn.query(
+  `SELECT COUNT(*) AS c FROM information_schema.TABLES
+   WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'app_settings'`,
+  [process.env.MYSQL_DATABASE],
+);
+if (!appSettingsTable.c) {
+  await conn.query(`
+    CREATE TABLE app_settings (
+      k VARCHAR(64) NOT NULL PRIMARY KEY,
+      v TEXT NOT NULL,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+  console.log('  · 已创建 app_settings 表');
+}
+
 const [[noteReviewTable]] = await conn.query(
   `SELECT COUNT(*) AS c FROM information_schema.TABLES
    WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'verse_note_reviews'`,
