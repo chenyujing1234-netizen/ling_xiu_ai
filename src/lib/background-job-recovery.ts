@@ -92,6 +92,73 @@ export function jobResultDisplayable(label: string, data: unknown): boolean {
   return false;
 }
 
+/** 页面刷新后无原 task 闭包时，按 recovery 重新发起生成（与首次请求一致，非 cacheOnly） */
+export function retryTaskFromRecovery(recovery: JobRecovery): (() => Promise<unknown>) | null {
+  switch (recovery.kind) {
+    case 'insights':
+      return () => api(`/api/insights?${recovery.query}`);
+    case 'noteReview':
+      return async () => {
+        const res = await api<{ review: string | null }>(`/api/notes/${recovery.noteId}/review`, {
+          method: 'POST',
+        });
+        if (!res.review?.trim()) throw new Error('暂时无法生成点评，稍后再试');
+        return res;
+      };
+    case 'chapterReview':
+      return async () => {
+        const res = await api<{ review: string | null }>(
+          `/api/notes/chapter-review?book=${recovery.bookId}&chapter=${recovery.chapter}`,
+          { method: 'POST' },
+        );
+        if (!res.review?.trim()) throw new Error('暂时无法生成总结，稍后再试');
+        return res;
+      };
+    case 'devotionPrompts':
+      return () =>
+        api(`/api/devotion/${recovery.devotionId}/action`, { json: { action: 'prompts' } });
+    case 'devotionScore':
+      return () =>
+        api(`/api/devotion/${recovery.devotionId}/action`, { json: { action: 'score' } });
+    case 'devotionNudge':
+      return () =>
+        api<{ questions: string[] }>(
+          `/api/devotion/nudge?book=${recovery.book}&chapter=${recovery.chapter}`,
+        );
+    case 'devotionCoach':
+      return async () => {
+        const res = await fetch(`/api/devotion/${recovery.devotionId}/guide-stream`, {
+          method: 'POST',
+        });
+        if (!res.ok || !res.body) {
+          const info = await res.json().catch(() => ({ error: '引导生成失败' }));
+          throw new Error((info as { error?: string }).error ?? '引导生成失败');
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop() ?? '';
+          for (const part of parts) {
+            const line = part.split('\n').find((l) => l.startsWith('data:'));
+            if (!line) continue;
+            const event = JSON.parse(line.slice(5).trim()) as { type?: string; message?: string };
+            if (event.type === 'error') {
+              throw new Error(event.message ?? '引导生成失败');
+            }
+          }
+        }
+        return { guideReady: true };
+      };
+    default:
+      return null;
+  }
+}
+
 export function devotionRecoveryForAction(
   action: string,
   devotionId: number,

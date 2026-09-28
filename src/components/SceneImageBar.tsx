@@ -151,12 +151,8 @@ export default function SceneImageBar({
               <p className="rounded-xl bg-accent/10 px-4 py-3 text-sm text-accent">{error}</p>
             )}
 
-            <div className="mb-4">
-              <ImageStylePicker value={style} onChange={setStyle} compact disabled={busy} />
-            </div>
-
             {!error && url && (
-              <figure>
+              <figure className="mb-4">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={url}
@@ -171,6 +167,10 @@ export default function SceneImageBar({
                 </figcaption>
               </figure>
             )}
+
+            <div className="mb-4">
+              <ImageStylePicker value={style} onChange={setStyle} compact disabled={busy} />
+            </div>
 
             {!busy && url && (
               <button onClick={() => void generate(true)} className="btn-ghost mt-3 w-full py-2 text-sm">

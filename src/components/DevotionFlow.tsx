@@ -117,6 +117,8 @@ export default function DevotionFlow({ id }: { id: number }) {
   const searchParams = useSearchParams();
   const flowTab: HomeTab = searchParams.get('tab') === 'explore' ? 'explore' : 'devotion';
   const [d, setD] = useState<Detail | null>(null);
+  /** 已完成灵修：默认看完成总结，可切回与当时相同的默想页回看笔记 */
+  const [doneReviewOpen, setDoneReviewOpen] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const { runJob } = useBackgroundJobs();
@@ -144,6 +146,10 @@ export default function DevotionFlow({ id }: { id: number }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    setDoneReviewOpen(false);
+  }, [id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -338,8 +344,10 @@ export default function DevotionFlow({ id }: { id: number }) {
                 </svg>
               </button>
             </div>
-            {stage !== 'done' && (
-              <p className="mt-2 text-center text-[11px] font-semibold text-brand-600">一起默想</p>
+            {(stage !== 'done' || doneReviewOpen) && (
+              <p className="mt-2 text-center text-[11px] font-semibold text-brand-600">
+                {stage === 'done' ? '回看笔记' : '一起默想'}
+              </p>
             )}
           </header>
 
@@ -376,7 +384,32 @@ export default function DevotionFlow({ id }: { id: number }) {
                 reportError={setError}
               />
             )}
-            {stage === 'done' && <DoneStage d={d} devotionId={id} />}
+            {stage === 'done' && !doneReviewOpen && (
+              <DoneStage d={d} devotionId={id} onOpenReview={() => setDoneReviewOpen(true)} />
+            )}
+            {stage === 'done' && doneReviewOpen && (
+              <>
+                <div className="mb-4">
+                  <button
+                    type="button"
+                    className="btn-ghost w-full py-2.5 text-sm"
+                    onClick={() => setDoneReviewOpen(false)}
+                  >
+                    查看完成总结
+                  </button>
+                </div>
+                <CombinedPrepStage
+                  d={d}
+                  act={act}
+                  sync={sync}
+                  busy={busy}
+                  reload={load}
+                  onViewSavedFeedback={onViewSavedFeedback}
+                  reportError={setError}
+                  reviewMode
+                />
+              </>
+            )}
           </div>
         </>
       </DevotionHome>
@@ -394,6 +427,8 @@ type StageProps = {
   reload: () => Promise<void>;
   onViewSavedFeedback: (stage: FeedbackStageKey) => void;
   reportError?: (message: string) => void;
+  /** 已完成灵修：只读回看，布局与一起默想页一致 */
+  reviewMode?: boolean;
 };
 
 // ---------- 经文（可折叠，长按写笔记） ----------
@@ -1018,7 +1053,16 @@ function DevotionWriteSection({
 }
 
 /** 观察 + 提问 + 默想：同一页按顺序写，不必分步点「下一步」 */
-function CombinedPrepStage({ d, act, sync, busy, reload, onViewSavedFeedback, reportError }: StageProps) {
+function CombinedPrepStage({
+  d,
+  act,
+  sync,
+  busy,
+  reload,
+  onViewSavedFeedback,
+  reportError,
+  reviewMode,
+}: StageProps) {
   const { runJob } = useBackgroundJobs();
   const [nudges, setNudges] = useState<string[] | null>(null);
   const [nudgeBusy, setNudgeBusy] = useState(false);
@@ -1054,6 +1098,7 @@ function CombinedPrepStage({ d, act, sync, busy, reload, onViewSavedFeedback, re
   const qListed = questions.filter((q) => q.id !== qDraft.draftId);
 
   useEffect(() => {
+    if (reviewMode) return;
     if (d.prompts.length || asked.current) return;
     asked.current = true;
     setLoadingPrompts(true);
@@ -1068,7 +1113,7 @@ function CombinedPrepStage({ d, act, sync, busy, reload, onViewSavedFeedback, re
       setLoadingPrompts(false);
       void reload();
     });
-  }, [d.prompts.length, d.devotion.id, reload, runJob, reportError]);
+  }, [d.prompts.length, d.devotion.id, reload, runJob, reportError, reviewMode]);
 
   async function askForHelp() {
     setNudgeBusy(true);
@@ -1111,11 +1156,21 @@ function CombinedPrepStage({ d, act, sync, busy, reload, onViewSavedFeedback, re
     void promise.then(() => reload());
   }
 
+  const lifeFacts = d.inputs.filter((i) => i.kind === 'life_fact');
+  const prayers = d.inputs.filter((i) => i.kind === 'prayer');
+  const coachLines = d.coach.filter((m) => m.role === 'coach' && m.content?.trim());
+
   return (
     <div>
-      <StageIntro title="一起默想这一章" compact={readingCompact}>
-        下面三块可以按你的节奏写，<strong className="font-medium text-ink">不用按顺序点下一步</strong>。
-        先写看见的、再写想问的、最后回答默想题；写够后评估一次，就能请陪读者引导。
+      <StageIntro title={reviewMode ? '这次灵修的笔记' : '一起默想这一章'} compact={readingCompact}>
+        {reviewMode ? (
+          <>布局与灵修时相同，经文与笔记仅供回看，不可再提交完成。</>
+        ) : (
+          <>
+            下面三块可以按你的节奏写，<strong className="font-medium text-ink">不用按顺序点下一步</strong>。
+            先写看见的、再写想问的、最后回答默想题；写够后评估一次，就能请陪读者引导。
+          </>
+        )}
       </StageIntro>
 
       <DevotionPassage
@@ -1128,111 +1183,152 @@ function CombinedPrepStage({ d, act, sync, busy, reload, onViewSavedFeedback, re
 
       <DevotionWriteSection
         title="1 · 我看见的"
-        hint="只写经文里确实存在的内容：谁、在哪里、做了什么。还不用写感想。"
+        hint={
+          reviewMode
+            ? '灵修时写下的观察'
+            : '只写经文里确实存在的内容：谁、在哪里、做了什么。还不用写感想。'
+        }
       >
-        {obsArchived.length > 0 && (
-          <ul className="mb-3 space-y-2">
-            {obsArchived.map((i) => (
-              <li key={i.id} className="card flex items-start gap-2 px-4 py-3">
-                <p className="flex-1 text-[14px] leading-relaxed">{i.content}</p>
-                <button
-                  type="button"
-                  className="btn-ghost shrink-0 px-2 py-1 text-xs"
-                  onClick={() => act({ action: 'removeInput', inputId: i.id })}
-                >
-                  删除
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <textarea
-          className="field min-h-[110px] resize-none"
-          placeholder="按顺序写几条你看见的……不全也没关系"
-          value={obsDraft.text}
-          onChange={(e) => obsDraft.setText(e.target.value)}
-          onBlur={obsDraft.onBlur}
-        />
-        <div className="mt-1.5 flex items-center justify-between gap-2">
-          <span className="text-xs text-muted">
-            已保存 {observations.length} 条 · 停笔自动保存
-          </span>
-          <Dictate onText={(t) => obsDraft.setText((prev) => joinDictation(prev, t))} disabled={busy} />
-        </div>
-        <div className="mt-4 border-t border-line pt-3" data-nudge-panel>
-          {!nudges ? (
-            <button
-              type="button"
-              className="btn-secondary py-2.5 text-sm"
-              onClick={askForHelp}
-              disabled={nudgeBusy}
-            >
-              {nudgeBusy ? '参考题生成中…' : '需要灵感？看几道参考题'}
-            </button>
+        {reviewMode ? (
+          observations.length > 0 ? (
+            <ul className="space-y-2">
+              {observations.map((i) => (
+                <li key={i.id} className="card px-4 py-3">
+                  <p className="text-[14px] leading-relaxed">{i.content}</p>
+                </li>
+              ))}
+            </ul>
           ) : (
-            <div className="rounded-lg bg-brand-50/60 px-3 py-2.5">
-              <p className="label mb-2">参考题（可选，挑一题写在上面）</p>
-              <ul className="space-y-2">
-                {nudges.map((q, i) => (
-                  <li key={i} className="text-[14px] leading-relaxed text-ink/90">
-                    {i + 1}. {q}
+            <p className="text-sm text-muted">（未记录）</p>
+          )
+        ) : (
+          <>
+            {obsArchived.length > 0 && (
+              <ul className="mb-3 space-y-2">
+                {obsArchived.map((i) => (
+                  <li key={i.id} className="card flex items-start gap-2 px-4 py-3">
+                    <p className="flex-1 text-[14px] leading-relaxed">{i.content}</p>
+                    <button
+                      type="button"
+                      className="btn-ghost shrink-0 px-2 py-1 text-xs"
+                      onClick={() => act({ action: 'removeInput', inputId: i.id })}
+                    >
+                      删除
+                    </button>
                   </li>
                 ))}
               </ul>
+            )}
+            <textarea
+              className="field min-h-[110px] resize-none"
+              placeholder="按顺序写几条你看见的……不全也没关系"
+              value={obsDraft.text}
+              onChange={(e) => obsDraft.setText(e.target.value)}
+              onBlur={obsDraft.onBlur}
+            />
+            <div className="mt-1.5 flex items-center justify-between gap-2">
+              <span className="text-xs text-muted">
+                已保存 {observations.length} 条 · 停笔自动保存
+              </span>
+              <Dictate onText={(t) => obsDraft.setText((prev) => joinDictation(prev, t))} disabled={busy} />
             </div>
-          )}
-        </div>
+            <div className="mt-4 border-t border-line pt-3" data-nudge-panel>
+              {!nudges ? (
+                <button
+                  type="button"
+                  className="btn-secondary py-2.5 text-sm"
+                  onClick={askForHelp}
+                  disabled={nudgeBusy}
+                >
+                  {nudgeBusy ? '参考题生成中…' : '需要灵感？看几道参考题'}
+                </button>
+              ) : (
+                <div className="rounded-lg bg-brand-50/60 px-3 py-2.5">
+                  <p className="label mb-2">参考题（可选，挑一题写在上面）</p>
+                  <ul className="space-y-2">
+                    {nudges.map((q, i) => (
+                      <li key={i} className="text-[14px] leading-relaxed text-ink/90">
+                        {i + 1}. {q}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </DevotionWriteSection>
 
       <DevotionWriteSection
         title="2 · 我想问的"
-        hint="写下读经时心里冒出来的疑问。问你自己也答不上来的，最好。"
+        hint={reviewMode ? '灵修时提出的问题' : '写下读经时心里冒出来的疑问。问你自己也答不上来的，最好。'}
       >
-        {qListed.length > 0 && (
-          <ul className="mb-3 space-y-2">
-            {qListed.map((q, n) => (
-              <li key={q.id} className="card flex items-start gap-2 px-4 py-3">
-                <span className="mt-0.5 text-xs text-brand-300">{n + 1}</span>
-                <p className="flex-1 text-[14px] leading-relaxed">{q.content}</p>
-                <button
-                  type="button"
-                  className="btn-ghost shrink-0 px-2 py-1 text-xs"
-                  onClick={() => act({ action: 'removeInput', inputId: q.id })}
-                >
-                  删除
-                </button>
-              </li>
-            ))}
-          </ul>
+        {reviewMode ? (
+          questions.length > 0 ? (
+            <ul className="space-y-2">
+              {questions.map((q, n) => (
+                <li key={q.id} className="card flex items-start gap-2 px-4 py-3">
+                  <span className="mt-0.5 text-xs text-brand-300">{n + 1}</span>
+                  <p className="flex-1 text-[14px] leading-relaxed">{q.content}</p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted">（未记录）</p>
+          )
+        ) : (
+          <>
+            {qListed.length > 0 && (
+              <ul className="mb-3 space-y-2">
+                {qListed.map((q, n) => (
+                  <li key={q.id} className="card flex items-start gap-2 px-4 py-3">
+                    <span className="mt-0.5 text-xs text-brand-300">{n + 1}</span>
+                    <p className="flex-1 text-[14px] leading-relaxed">{q.content}</p>
+                    <button
+                      type="button"
+                      className="btn-ghost shrink-0 px-2 py-1 text-xs"
+                      onClick={() => act({ action: 'removeInput', inputId: q.id })}
+                    >
+                      删除
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <input
+              className="field w-full"
+              placeholder="写下你的一个问题…"
+              value={qDraft.text}
+              onChange={(e) => qDraft.setText(e.target.value)}
+              onBlur={qDraft.onBlur}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void qDraft.flushNow();
+                }
+              }}
+            />
+            <div className="mt-1.5 flex items-center justify-between gap-2">
+              <p className="text-xs text-muted">至少 1 个问题 · 停笔自动保存</p>
+              <Dictate
+                onText={(t) => qDraft.setText((prev) => joinDictation(prev, t, ' '))}
+                disabled={busy}
+                hint="说完自动填进问题框"
+              />
+            </div>
+          </>
         )}
-        <input
-          className="field w-full"
-          placeholder="写下你的一个问题…"
-          value={qDraft.text}
-          onChange={(e) => qDraft.setText(e.target.value)}
-          onBlur={qDraft.onBlur}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              void qDraft.flushNow();
-            }
-          }}
-        />
-        <div className="mt-1.5 flex items-center justify-between gap-2">
-          <p className="text-xs text-muted">至少 1 个问题 · 停笔自动保存</p>
-          <Dictate
-            onText={(t) => qDraft.setText((prev) => joinDictation(prev, t, ' '))}
-            disabled={busy}
-            hint="说完自动填进问题框"
-          />
-        </div>
       </DevotionWriteSection>
 
       <DevotionWriteSection
         title="3 · 默想作答"
-        hint="不是考试。可按需提交评估（后台进行），写够观察、提问与作答后即可完成本次灵修。"
+        hint={
+          reviewMode
+            ? '当时生成的默想题与你的回答'
+            : '不是考试。可按需提交评估（后台进行），写够观察、提问与作答后即可完成本次灵修。'
+        }
       >
-        {questions.length > 0 && (
+        {!reviewMode && questions.length > 0 && (
           <div className="mb-3 rounded-xl bg-brand-50/60 px-3 py-2.5">
             <p className="label mb-1.5">你提的问题（引导会先回应它们）</p>
             <ul className="space-y-1">
@@ -1245,7 +1341,7 @@ function CombinedPrepStage({ d, act, sync, busy, reload, onViewSavedFeedback, re
           </div>
         )}
 
-        {loadingPrompts && (
+        {!reviewMode && loadingPrompts && (
           <p className="mb-3 text-center text-xs text-brand-700">默想题在后台生成，请看右上角红点袋</p>
         )}
 
@@ -1262,6 +1358,7 @@ function CombinedPrepStage({ d, act, sync, busy, reload, onViewSavedFeedback, re
                 saved={mine}
                 sync={sync}
                 busy={busy}
+                readOnly={reviewMode}
                 onRemove={() => mine && act({ action: 'removeInput', inputId: mine.id })}
               />
             );
@@ -1280,38 +1377,101 @@ function CombinedPrepStage({ d, act, sync, busy, reload, onViewSavedFeedback, re
             />
           )}
 
-          <button
-            type="button"
-            className="btn-secondary mt-3 w-full py-3"
-            onClick={evaluate}
-            disabled={!savedAnswers.length}
-          >
-            {d.scores.length ? '重新提交评估（后台）' : '提交评估（后台，不阻塞）'}
-          </button>
-          {!savedAnswers.length && (
-            <p className="mt-2 text-center text-xs text-muted">先回答至少一道默想题</p>
-          )}
-          {savedAnswers.length > 0 && (
-            <p className="mt-2 text-center text-xs text-muted">
-              评估在红点袋进行，完成后可在任务列表查看；不阻塞完成灵修
-            </p>
+          {!reviewMode && (
+            <>
+              <button
+                type="button"
+                className="btn-secondary mt-3 w-full py-3"
+                onClick={evaluate}
+                disabled={!savedAnswers.length}
+              >
+                {d.scores.length ? '重新提交评估（后台）' : '提交评估（后台，不阻塞）'}
+              </button>
+              {!savedAnswers.length && (
+                <p className="mt-2 text-center text-xs text-muted">先回答至少一道默想题</p>
+              )}
+              {savedAnswers.length > 0 && (
+                <p className="mt-2 text-center text-xs text-muted">
+                  评估在红点袋进行，完成后可在任务列表查看；不阻塞完成灵修
+                </p>
+              )}
+
+              <div className="mt-4 space-y-2">
+                <SavedStageFeedbackButton
+                  stage="reflect"
+                  feedback={d.stageFeedbacks?.reflect}
+                  onView={onViewSavedFeedback}
+                />
+                <NextButton
+                  gate={d.gate}
+                  busy={busy}
+                  onNext={() => act({ action: 'complete' })}
+                  label="完成这次灵修"
+                />
+              </div>
+            </>
           )}
 
-          <div className="mt-4 space-y-2">
-            <SavedStageFeedbackButton
-              stage="reflect"
-              feedback={d.stageFeedbacks?.reflect}
-              onView={onViewSavedFeedback}
-            />
-            <NextButton
-              gate={d.gate}
-              busy={busy}
-              onNext={() => act({ action: 'complete' })}
-              label="完成这次灵修"
-            />
-          </div>
+          {reviewMode && (
+            <div className="mt-4 space-y-2">
+              <SavedStageFeedbackButton
+                stage="observe"
+                feedback={d.stageFeedbacks?.observe}
+                onView={onViewSavedFeedback}
+              />
+              <SavedStageFeedbackButton
+                stage="inquire"
+                feedback={d.stageFeedbacks?.inquire}
+                onView={onViewSavedFeedback}
+              />
+              <SavedStageFeedbackButton
+                stage="reflect"
+                feedback={d.stageFeedbacks?.reflect}
+                onView={onViewSavedFeedback}
+              />
+            </div>
+          )}
         </div>
       </DevotionWriteSection>
+
+      {reviewMode && (lifeFacts.length > 0 || prayers.length > 0 || coachLines.length > 0) && (
+        <div className="mt-6 space-y-4">
+          {lifeFacts.length > 0 && (
+            <DevotionWriteSection title="生命实事" hint="灵修时记下的真实处境">
+              <ul className="space-y-2">
+                {lifeFacts.map((i) => (
+                  <li key={i.id} className="card px-4 py-3">
+                    <p className="text-[14px] leading-relaxed">{i.content}</p>
+                  </li>
+                ))}
+              </ul>
+            </DevotionWriteSection>
+          )}
+          {prayers.length > 0 && (
+            <DevotionWriteSection title="祷告回应" hint="灵修时的祷告">
+              <ul className="space-y-2">
+                {prayers.map((i) => (
+                  <li key={i.id} className="card px-4 py-3">
+                    <p className="text-[14px] leading-relaxed">{i.content}</p>
+                  </li>
+                ))}
+              </ul>
+            </DevotionWriteSection>
+          )}
+          {coachLines.length > 0 && (
+            <DevotionWriteSection title="陪读者的回应" hint="引导阶段生成的话">
+              <div className="space-y-3">
+                {coachLines.map((m, i) => (
+                  <div key={i} className="card px-4 py-3">
+                    <p className="text-[14px] leading-relaxed text-ink/90">{m.content}</p>
+                    <RagSourcesFootnote sources={m.ragSources} />
+                  </div>
+                ))}
+              </div>
+            </DevotionWriteSection>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1557,6 +1717,7 @@ function ReflectAnswerField({
   saved,
   sync,
   busy,
+  readOnly,
   onRemove,
 }: {
   promptId: number;
@@ -1566,6 +1727,7 @@ function ReflectAnswerField({
   saved: Input | undefined;
   sync: SyncFn;
   busy: boolean;
+  readOnly?: boolean;
   onRemove: () => void;
 }) {
   const seed = saved ? { id: saved.id, content: saved.content } : null;
@@ -1585,25 +1747,35 @@ function ReflectAnswerField({
       </div>
       <p className="text-[15px] font-medium leading-relaxed">{question}</p>
       <div className="mt-2.5">
-        <textarea
-          className="field min-h-[86px] resize-none"
-          placeholder="想到什么写什么，不用组织得很漂亮"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onBlur={onBlur}
-        />
-        <div className="mt-2 flex items-center gap-2">
-          {saved && (
-            <button type="button" className="btn-ghost px-2.5 py-1.5 text-xs" onClick={onRemove}>
-              清空重答
-            </button>
-          )}
-          <Dictate
-            onText={(t) => setText((prev) => joinDictation(prev, t))}
-            disabled={busy}
-            hint="说完自动填进这一题的答题框"
-          />
-        </div>
+        {readOnly ? (
+          saved?.content?.trim() ? (
+            <p className="text-[14px] leading-relaxed text-ink/90">{saved.content}</p>
+          ) : (
+            <p className="text-sm text-muted">（未作答）</p>
+          )
+        ) : (
+          <>
+            <textarea
+              className="field min-h-[86px] resize-none"
+              placeholder="想到什么写什么，不用组织得很漂亮"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onBlur={onBlur}
+            />
+            <div className="mt-2 flex items-center gap-2">
+              {saved && (
+                <button type="button" className="btn-ghost px-2.5 py-1.5 text-xs" onClick={onRemove}>
+                  清空重答
+                </button>
+              )}
+              <Dictate
+                onText={(t) => setText((prev) => joinDictation(prev, t))}
+                disabled={busy}
+                hint="说完自动填进这一题的答题框"
+              />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -2190,7 +2362,15 @@ function PrayerStage({ d, act, sync, busy, reload, onViewSavedFeedback: _onViewS
 
 // ---------- 7. 完成卡片 ----------
 
-function DoneStage({ d, devotionId }: { d: Detail; devotionId: number }) {
+function DoneStage({
+  d,
+  devotionId,
+  onOpenReview,
+}: {
+  d: Detail;
+  devotionId: number;
+  onOpenReview: () => void;
+}) {
   const pick = (kind: string) => d.inputs.filter((i) => i.kind === kind);
   const sections: [string, Input[]][] = [
     ['我看见的', pick('observation')],
@@ -2243,13 +2423,18 @@ function DoneStage({ d, devotionId }: { d: Detail; devotionId: number }) {
         )}
       </div>
 
-      <div className="mt-5 flex gap-2">
-        <Link href={`/devotion/${devotionId}?tab=explore`} className="btn-ghost flex-1">
-          看这章的经文资料
-        </Link>
-        <Link href="/devotion" className="btn-primary flex-1">
-          返回灵修列表
-        </Link>
+      <div className="mt-5 space-y-2">
+        <button type="button" className="btn-primary w-full py-3" onClick={onOpenReview}>
+          回到我做的笔记
+        </button>
+        <div className="flex gap-2">
+          <Link href={`/devotion/${devotionId}?tab=explore`} className="btn-ghost flex-1">
+            看这章的经文资料
+          </Link>
+          <Link href="/devotion" className="btn-ghost flex-1">
+            返回灵修列表
+          </Link>
+        </div>
       </div>
     </div>
   );

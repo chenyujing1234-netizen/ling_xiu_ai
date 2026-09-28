@@ -9,9 +9,11 @@ import type { JobResultView } from '@/lib/background-job-result';
 export default function BackgroundJobResultSheet({
   view,
   onClose,
+  onRetry,
 }: {
   view: JobResultView;
   onClose: () => void;
+  onRetry?: () => void;
 }) {
   const title =
     view.kind === 'image' ? view.caption : view.kind === 'questions' ? view.title : view.title;
@@ -50,6 +52,11 @@ export default function BackgroundJobResultSheet({
           >
             <p className="whitespace-pre-wrap">{view.body}</p>
             {!view.isError && <RagSourcesFootnote sources={view.ragSources} />}
+            {view.isError && onRetry && (
+              <button type="button" className="btn-primary mt-4 w-full" onClick={onRetry}>
+                重试
+              </button>
+            )}
           </div>
         )}
 

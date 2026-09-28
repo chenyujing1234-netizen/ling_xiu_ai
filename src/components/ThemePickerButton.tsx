@@ -1,25 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { SheetCloseButton } from '@/components/Ui';
+import { IconPalette, SheetCloseButton } from '@/components/Ui';
 import ThemePicker from './ThemePicker';
-
-function IconPalette({ className }: { className?: string }) {
-  return (
-    <svg className={className} width={22} height={22} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M12 3c-4.5 0-8 3.2-8 7.2 0 2.8 2.2 5 5 5h1.5a1.5 1.5 0 001.5-1.5c0-.8-.6-1.5-1.3-1.5H10a3 3 0 01-3-3c0-2.8 2.5-5.2 5.5-5.2 3.2 0 5.5 2.4 5.5 5.5 0 .6-.5 1.2-1.2 1.2H16"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-      />
-      <circle cx="8" cy="8.5" r="1" fill="currentColor" />
-      <circle cx="10.5" cy="6" r="1" fill="currentColor" />
-      <circle cx="14" cy="6.5" r="1" fill="currentColor" />
-      <circle cx="16" cy="9.5" r="1" fill="currentColor" />
-    </svg>
-  );
-}
 
 /** 首页右上角：点开底部面板选风格 */
 export default function ThemePickerButton({ initial }: { initial: string }) {
@@ -31,9 +14,9 @@ export default function ThemePickerButton({ initial }: { initial: string }) {
         type="button"
         aria-label="界面风格"
         onClick={() => setOpen(true)}
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line bg-card text-brand-600 shadow-soft active:bg-brand-50"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line bg-card shadow-soft active:bg-brand-50"
       >
-        <IconPalette />
+        <IconPalette size={22} colorful />
       </button>
 
       {open && (

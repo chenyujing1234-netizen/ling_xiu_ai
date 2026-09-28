@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/client';
 import KnowledgeGraph, { type GraphData } from './KnowledgeGraph';
@@ -152,6 +152,8 @@ function LazyPanel<T>({
   actionLabel,
   hint,
   extraQuery = '',
+  panelHeader,
+  panelFooter,
   children,
 }: {
   kind: string;
@@ -161,6 +163,10 @@ function LazyPanel<T>({
   hint: string;
   /** 追加到 insights 请求，例如 &style=watercolor */
   extraQuery?: string;
+  /** 无缓存时显示在生成区上方（如风格选择） */
+  panelHeader?: ReactNode;
+  /** 已有缓存结果时显示在内容下方（如风格选择，让配图本身在最上） */
+  panelFooter?: ReactNode;
   children: (data: T, extra: { unlocked?: boolean; lockedHint?: string; ragSources?: RagSource[] }) => React.ReactNode;
 }) {
   const { runJob } = useBackgroundJobs();
@@ -237,7 +243,10 @@ function LazyPanel<T>({
   if (data) {
     return (
       <>
-        {children(data, extra)}
+        <div className="space-y-4">
+          {children(data, extra)}
+          {panelFooter}
+        </div>
         <RagSourcesFootnote sources={extra.ragSources} />
       </>
     );
@@ -245,30 +254,39 @@ function LazyPanel<T>({
 
   if (probing) {
     return (
-      <div className="rounded-2xl border border-dashed border-line px-5 py-10 text-center text-sm text-muted">
-        载入中…
+      <div className="space-y-4">
+        {panelHeader}
+        <div className="rounded-2xl border border-dashed border-line px-5 py-10 text-center text-sm text-muted">
+          载入中…
+        </div>
       </div>
     );
   }
 
   if (busy) {
     return (
-      <div
-        ref={panelRef}
-        className="rounded-2xl border border-dashed border-brand-200 bg-brand-50/50 px-5 py-8 text-center text-sm text-brand-800"
-      >
-        已在后台生成「{actionLabel.replace(/^生成/, '')}」，请看右上角红点袋；完成后会自动展示结果。
+      <div className="space-y-4">
+        {panelHeader}
+        <div
+          ref={panelRef}
+          className="rounded-2xl border border-dashed border-brand-200 bg-brand-50/50 px-5 py-8 text-center text-sm text-brand-800"
+        >
+          已在后台生成「{actionLabel.replace(/^生成/, '')}」，请看右上角红点袋；完成后会自动展示结果。
+        </div>
       </div>
     );
   }
 
   return (
-    <div ref={panelRef} className="rounded-2xl border border-dashed border-line px-5 py-10 text-center">
-      <p className="mb-4 text-sm leading-relaxed text-muted">{hint}</p>
-      {error && <p className="mb-3 text-sm text-accent">{error}</p>}
-      <button className="btn-primary" onClick={load}>
-        {actionLabel}
-      </button>
+    <div className="space-y-4">
+      {panelHeader}
+      <div ref={panelRef} className="rounded-2xl border border-dashed border-line px-5 py-10 text-center">
+        <p className="mb-4 text-sm leading-relaxed text-muted">{hint}</p>
+        {error && <p className="mb-3 text-sm text-accent">{error}</p>}
+        <button className="btn-primary" onClick={load}>
+          {actionLabel}
+        </button>
+      </div>
     </div>
   );
 }
@@ -453,19 +471,20 @@ function MindmapPanel({ book, chapter, label }: { book: number; chapter: number;
 function ImagePanel({ book, chapter, label }: { book: number; chapter: number; label: string }) {
   const [style, setStyle] = usePreferredImageStyle();
   const styleQ = `&style=${encodeURIComponent(style)}`;
+  const stylePicker = <ImageStylePicker value={style} onChange={setStyle} />;
 
   return (
-    <div className="space-y-4">
-      <ImageStylePicker value={style} onChange={setStyle} />
-      <LazyPanel<{ url: string | null }>
-        key={style}
-        kind="image"
-        book={book}
-        chapter={chapter}
-        extraQuery={styleQ}
-        actionLabel="生成意境配图"
-        hint="根据这一章的场景与所选风格生成一张意境画面。生成需要较长时间，请耐心等待。"
-      >
+    <LazyPanel<{ url: string | null }>
+      key={style}
+      kind="image"
+      book={book}
+      chapter={chapter}
+      extraQuery={styleQ}
+      panelHeader={stylePicker}
+      panelFooter={stylePicker}
+      actionLabel="生成意境配图"
+      hint="根据这一章的场景与所选风格生成一张意境画面。生成需要较长时间，请耐心等待。"
+    >
         {(data) =>
           data.url ? (
             <figure>
@@ -488,8 +507,7 @@ function ImagePanel({ book, chapter, label }: { book: number; chapter: number; l
             </p>
           )
         }
-      </LazyPanel>
-    </div>
+    </LazyPanel>
   );
 }
 

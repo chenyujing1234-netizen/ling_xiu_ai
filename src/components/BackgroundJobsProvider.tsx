@@ -16,6 +16,7 @@ import { parseJobResult, type JobResultView } from '@/lib/background-job-result'
 import {
   jobResultDisplayable,
   pollJobRecovery,
+  retryTaskFromRecovery,
   type JobRecovery,
 } from '@/lib/background-job-recovery';
 import {
@@ -48,6 +49,8 @@ type RunJobOptions<T> = {
   /** 页面刷新后续接：轮询 cache / 灵修数据直到完成 */
   recovery?: JobRecovery;
 };
+
+type StoredRunOpts = RunJobOptions<unknown>;
 
 export type { JobRecovery };
 
@@ -85,17 +88,28 @@ function statusLabel(status: BackgroundJobStatus) {
   return '失败';
 }
 
+function canRetryJob(job: BackgroundJob, retryOpts: Map<string, StoredRunOpts>): boolean {
+  if (job.status !== 'error') return false;
+  if (retryOpts.has(job.id)) return true;
+  if (job.recovery && retryTaskFromRecovery(job.recovery)) return true;
+  return false;
+}
+
 export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
   const initial = useRef(readInitialJobsState());
   const [jobs, setJobs] = useState<BackgroundJob[]>(() => initial.current.jobs);
   const [bagPulse, setBagPulse] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const presentMap = useRef(new Map<string, () => void>());
+  const retryOptsRef = useRef(new Map<string, StoredRunOpts>());
   const resultMap = useRef(new Map<string, unknown>(Object.entries(initial.current.results)));
   const resumeStarted = useRef(new Set<string>());
   const jobsRef = useRef(jobs);
   jobsRef.current = jobs;
-  const [resultView, setResultView] = useState<JobResultView | null>(null);
+  const [resultView, setResultView] = useState<{
+    view: JobResultView;
+    errorJobId?: string;
+  } | null>(null);
   /** 有任务完成但未自动展开（例如正在看另一个结果）时，右上角数字变绿 */
   const [bagReady, setBagReady] = useState(false);
   const resultViewOpenRef = useRef(false);
@@ -225,13 +239,96 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
   const dismissJob = useCallback((id: string) => {
     setJobs((prev) => prev.filter((j) => j.id !== id));
     presentMap.current.delete(id);
+    retryOptsRef.current.delete(id);
     resultMap.current.delete(id);
   }, []);
+
+  const presentSuccess = useCallback((id: string) => {
+    const present = presentMap.current.get(id);
+    if (!present) return;
+    window.setTimeout(() => {
+      const notifyOnly = () => {
+        setBagReady(true);
+        setBagPulse(true);
+        window.setTimeout(() => setBagPulse(false), 420);
+      };
+      if (shouldDeferBackgroundJobPresent()) {
+        notifyOnly();
+        return;
+      }
+      if (resultViewOpenRef.current) {
+        notifyOnly();
+        return;
+      }
+      try {
+        present();
+      } catch {
+        /* 组件已卸载时忽略 */
+      }
+    }, 80);
+  }, []);
+
+  const executeJobTask = useCallback(
+    (id: string, opts: StoredRunOpts): Promise<unknown> =>
+      opts
+        .task()
+        .then((data) => {
+          finishJob(id, { status: 'done', finishedAt: Date.now(), error: undefined });
+          resultMap.current.set(id, data);
+          opts.onSuccess?.(data);
+          setResultView((prev) => (prev?.errorJobId === id ? null : prev));
+          presentSuccess(id);
+          return data;
+        })
+        .catch((err: Error) => {
+          finishJob(id, {
+            status: 'error',
+            error: err.message || '生成失败',
+            finishedAt: Date.now(),
+          });
+          opts.onError?.(err);
+          throw err;
+        }),
+    [finishJob, presentSuccess],
+  );
+
+  const resolveRetryOpts = useCallback((job: BackgroundJob): StoredRunOpts | null => {
+    const stored = retryOptsRef.current.get(job.id);
+    if (stored) return stored;
+    if (!job.recovery) return null;
+    const task = retryTaskFromRecovery(job.recovery);
+    if (!task) return null;
+    const rebuilt: StoredRunOpts = { label: job.label, task, recovery: job.recovery };
+    retryOptsRef.current.set(job.id, rebuilt);
+    return rebuilt;
+  }, []);
+
+  const retryJob = useCallback(
+    (id: string) => {
+      const job = jobsRef.current.find((j) => j.id === id);
+      if (!job || job.status !== 'error') return;
+
+      const opts = resolveRetryOpts(job);
+      if (!opts) return;
+
+      resumeStarted.current.delete(id);
+      finishJob(id, {
+        status: 'running',
+        error: undefined,
+        finishedAt: undefined,
+        startedAt: Date.now(),
+      });
+      setResultView(null);
+      void executeJobTask(id, opts).catch(() => {});
+    },
+    [executeJobTask, finishJob, resolveRetryOpts],
+  );
 
   const runJob = useCallback(
     <T,>(opts: RunJobOptions<T>) => {
       const id = nextId();
       const startedAt = Date.now();
+      const stored = opts as StoredRunOpts;
       setJobs((prev) =>
         [
           {
@@ -244,53 +341,14 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
           ...prev,
         ].slice(0, MAX_JOBS),
       );
+      retryOptsRef.current.set(id, stored);
       if (opts.present) presentMap.current.set(id, opts.present);
       spawnThrow(opts.throwFrom);
 
-      const promise = opts
-        .task()
-        .then((data) => {
-          finishJob(id, { status: 'done', finishedAt: Date.now() });
-          resultMap.current.set(id, data);
-          opts.onSuccess?.(data);
-          const present = presentMap.current.get(id);
-          if (present) {
-            window.setTimeout(() => {
-              const notifyOnly = () => {
-                setBagReady(true);
-                setBagPulse(true);
-                window.setTimeout(() => setBagPulse(false), 420);
-              };
-              if (shouldDeferBackgroundJobPresent()) {
-                notifyOnly();
-                return;
-              }
-              if (resultViewOpenRef.current) {
-                notifyOnly();
-                return;
-              }
-              try {
-                present();
-              } catch {
-                /* 组件已卸载时忽略 */
-              }
-            }, 80);
-          }
-          return data;
-        })
-        .catch((err: Error) => {
-          finishJob(id, {
-            status: 'error',
-            error: err.message || '生成失败',
-            finishedAt: Date.now(),
-          });
-          opts.onError?.(err);
-          throw err;
-        });
-
+      const promise = executeJobTask(id, stored) as Promise<T>;
       return { id, promise };
     },
-    [finishJob, spawnThrow],
+    [executeJobTask, spawnThrow],
   );
 
   const markMinimized = useCallback((_id: string) => {}, []);
@@ -305,10 +363,13 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
       if (job.status === 'error') {
         if (job.error?.trim()) {
           setResultView({
-            kind: 'text',
-            title: job.label,
-            body: job.error.trim(),
-            isError: true,
+            view: {
+              kind: 'text',
+              title: job.label,
+              body: job.error.trim(),
+              isError: true,
+            },
+            errorJobId: job.id,
           });
         }
         return;
@@ -316,7 +377,7 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
 
       const parsed = parseJobResult(job.label, resultMap.current.get(job.id));
       if (parsed) {
-        setResultView(parsed);
+        setResultView({ view: parsed });
         return;
       }
 
@@ -331,9 +392,11 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
       }
 
       setResultView({
-        kind: 'text',
-        title: job.label,
-        body: '结果已生成。请回到刚才的页面查看；若页面已关闭，可重新打开对应功能。',
+        view: {
+          kind: 'text',
+          title: job.label,
+          body: '结果已生成。请回到刚才的页面查看；若页面已关闭，可重新打开对应功能。',
+        },
       });
     };
 
@@ -345,6 +408,7 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
       for (const j of prev) {
         if (j.status !== 'running') {
           presentMap.current.delete(j.id);
+          retryOptsRef.current.delete(j.id);
           resultMap.current.delete(j.id);
         }
       }
@@ -414,8 +478,28 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
                             {statusLabel(j.status)}
                           </span>
                         </button>
-                        {j.status === 'error' && j.error && (
-                          <p className="px-3 pb-2 text-[11px] leading-snug text-accent">{j.error}</p>
+                        {j.status === 'error' && (
+                          <div className="flex items-start gap-2 px-2 pb-2">
+                            {j.error ? (
+                              <p className="min-w-0 flex-1 px-1 text-[11px] leading-snug text-accent">
+                                {j.error}
+                              </p>
+                            ) : (
+                              <span className="flex-1" />
+                            )}
+                            {canRetryJob(j, retryOptsRef.current) && (
+                              <button
+                                type="button"
+                                className="lx-bg-job-retry"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  retryJob(j.id);
+                                }}
+                              >
+                                重试
+                              </button>
+                            )}
+                          </div>
                         )}
                       </li>
                     ))}
@@ -432,7 +516,19 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
           document.body,
         )}
       {resultView && (
-        <BackgroundJobResultSheet view={resultView} onClose={() => setResultView(null)} />
+        <BackgroundJobResultSheet
+          view={resultView.view}
+          onClose={() => setResultView(null)}
+          onRetry={
+            resultView.errorJobId &&
+            (() => {
+              const job = jobs.find((j) => j.id === resultView.errorJobId);
+              return job && canRetryJob(job, retryOptsRef.current);
+            })()
+              ? () => retryJob(resultView.errorJobId!)
+              : undefined
+          }
+        />
       )}
     </BackgroundJobsContext.Provider>
   );

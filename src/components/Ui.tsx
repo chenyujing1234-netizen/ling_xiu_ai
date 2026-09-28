@@ -114,6 +114,46 @@ export function IconSpark({ className, size = 20 }: IconProps) {
   );
 }
 
+/** 调色盘：界面风格切换；colorful 用于首页等需要一眼认出的入口 */
+export function IconPalette({
+  className,
+  size = 20,
+  colorful = false,
+}: IconProps & { colorful?: boolean }) {
+  if (colorful) {
+    return (
+      <svg className={box(size, className)} width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path
+          d="M12 2C7.03 2 3 6.03 3 11c0 3.87 2.69 7.13 6.32 8.04.55.14 1.18-.28 1.18-.87v-.98c0-.83.67-1.5 1.5-1.5H14c2.76 0 5-2.24 5-5 0-4.42-3.58-8-8-8z"
+          fill="#FFF7ED"
+          stroke="#D4A574"
+          strokeWidth={1.5}
+          strokeLinejoin="round"
+        />
+        <circle cx="7.5" cy="10" r="1.35" fill="#EF4444" />
+        <circle cx="10.5" cy="7" r="1.35" fill="#3B82F6" />
+        <circle cx="14.5" cy="7.5" r="1.35" fill="#EAB308" />
+        <circle cx="16.5" cy="10.5" r="1.35" fill="#22C55E" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className={box(size, className)} width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 2C7.03 2 3 6.03 3 11c0 3.87 2.69 7.13 6.32 8.04.55.14 1.18-.28 1.18-.87v-.98c0-.83.67-1.5 1.5-1.5H14c2.76 0 5-2.24 5-5 0-4.42-3.58-8-8-8z"
+        stroke={stroke}
+        strokeWidth={sw}
+        strokeLinejoin="round"
+      />
+      <circle cx="7.5" cy="10" r="1" fill={stroke} />
+      <circle cx="10.5" cy="7" r="1" fill={stroke} />
+      <circle cx="14.5" cy="7.5" r="1" fill={stroke} />
+      <circle cx="16.5" cy="10.5" r="1" fill={stroke} />
+    </svg>
+  );
+}
+
 export function IconAdmin({ className, size = 20 }: IconProps) {
   return (
     <svg className={box(size, className)} width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
