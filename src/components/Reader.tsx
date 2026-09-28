@@ -5,9 +5,10 @@ import Link from 'next/link';
 import { api } from '@/lib/client';
 import NoteSheet, { type NoteEdit, type VerseTarget } from './NoteSheet';
 import VerseImageSheet from './VerseImageSheet';
+import VerseBackgroundSheet from './VerseBackgroundSheet';
 import SceneImageBar from './SceneImageBar';
 import BookPicker, { type BookBrief } from './BookPicker';
-import { NoteReviewedBadge, VerseImageButton, VerseLongPressHint } from './Ui';
+import { NoteReviewedBadge, VerseBackgroundButton, VerseImageButton, VerseLongPressHint } from './Ui';
 
 type Verse = { book_id: number; chapter: number; verse: number; cn: string; en: string };
 type Note = {
@@ -58,6 +59,7 @@ export default function Reader({
   const [bilingual, setBilingual] = useState(false);
   const [target, setTarget] = useState<VerseTarget | null>(null);
   const [imageTarget, setImageTarget] = useState<VerseTarget | null>(null);
+  const [backgroundTarget, setBackgroundTarget] = useState<VerseTarget | null>(null);
   const [editing, setEditing] = useState<NoteEdit | null>(null);
   const [pressing, setPressing] = useState<number | null>(null);
   const [picker, setPicker] = useState(false);
@@ -292,6 +294,18 @@ export default function Reader({
                     )}
                     {!picking && (
                       <>
+                        <VerseBackgroundButton
+                          onClick={() =>
+                            setBackgroundTarget({
+                              bookId: data.book.id,
+                              bookName: data.book.name_cn,
+                              chapter: data.chapter,
+                              verse: v.verse,
+                              cn: v.cn,
+                              en: v.en,
+                            })
+                          }
+                        />
                         <VerseImageButton
                           onClick={() =>
                             setImageTarget({
@@ -452,6 +466,14 @@ export default function Reader({
           target={imageTarget}
           onClose={() => setImageTarget(null)}
           onReopen={(t) => setImageTarget(t)}
+        />
+      )}
+
+      {backgroundTarget && (
+        <VerseBackgroundSheet
+          target={backgroundTarget}
+          onClose={() => setBackgroundTarget(null)}
+          onReopen={(t) => setBackgroundTarget(t)}
         />
       )}
     </div>

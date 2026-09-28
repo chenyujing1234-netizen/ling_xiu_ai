@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -12,6 +13,16 @@ import {
 import { createPortal } from 'react-dom';
 import { useBindOverlayHistory } from '@/lib/overlay-history';
 import { parseJobResult, type JobResultView } from '@/lib/background-job-result';
+import {
+  jobResultDisplayable,
+  pollJobRecovery,
+  type JobRecovery,
+} from '@/lib/background-job-recovery';
+import {
+  loadPersistedBackgroundJobs,
+  normalizeJobsOnRestore,
+  savePersistedBackgroundJobs,
+} from '@/lib/background-jobs-persist';
 import BackgroundJobResultSheet from './BackgroundJobResultSheet';
 import { shouldDeferBackgroundJobPresent } from '@/lib/note-recording-guard';
 
@@ -23,6 +34,8 @@ export type BackgroundJob = {
   status: BackgroundJobStatus;
   error?: string;
   finishedAt?: number;
+  startedAt?: number;
+  recovery?: JobRecovery;
 };
 
 type RunJobOptions<T> = {
@@ -32,7 +45,11 @@ type RunJobOptions<T> = {
   onError?: (err: Error) => void;
   present?: () => void;
   throwFrom?: { x: number; y: number };
+  /** 页面刷新后续接：轮询 cache / 灵修数据直到完成 */
+  recovery?: JobRecovery;
 };
+
+export type { JobRecovery };
 
 type Ctx = {
   jobs: BackgroundJob[];
@@ -46,9 +63,20 @@ const BackgroundJobsContext = createContext<Ctx | null>(null);
 
 const BAG_ID = 'lx-bg-job-bag';
 const MAX_JOBS = 30;
+const RESUME_POLL_MS = 2500;
+const RESUME_MAX_MS = 12 * 60 * 1000;
 
 function nextId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function readInitialJobsState(): { jobs: BackgroundJob[]; results: Record<string, unknown> } {
+  const persisted = loadPersistedBackgroundJobs();
+  if (!persisted) return { jobs: [], results: {} };
+  return {
+    jobs: normalizeJobsOnRestore(persisted.jobs),
+    results: persisted.results ?? {},
+  };
 }
 
 function statusLabel(status: BackgroundJobStatus) {
@@ -58,12 +86,109 @@ function statusLabel(status: BackgroundJobStatus) {
 }
 
 export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
-  const [jobs, setJobs] = useState<BackgroundJob[]>([]);
+  const initial = useRef(readInitialJobsState());
+  const [jobs, setJobs] = useState<BackgroundJob[]>(() => initial.current.jobs);
   const [bagPulse, setBagPulse] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const presentMap = useRef(new Map<string, () => void>());
-  const resultMap = useRef(new Map<string, unknown>());
+  const resultMap = useRef(new Map<string, unknown>(Object.entries(initial.current.results)));
+  const resumeStarted = useRef(new Set<string>());
+  const jobsRef = useRef(jobs);
+  jobsRef.current = jobs;
   const [resultView, setResultView] = useState<JobResultView | null>(null);
+  /** 有任务完成但未自动展开（例如正在看另一个结果）时，右上角数字变绿 */
+  const [bagReady, setBagReady] = useState(false);
+  const resultViewOpenRef = useRef(false);
+
+  useEffect(() => {
+    resultViewOpenRef.current = resultView !== null;
+  }, [resultView]);
+
+  const persistJobs = useCallback((list: BackgroundJob[]) => {
+    const results: Record<string, unknown> = {};
+    for (const [id, data] of resultMap.current.entries()) {
+      results[id] = data;
+    }
+    savePersistedBackgroundJobs(list, results);
+  }, []);
+
+  useEffect(() => {
+    persistJobs(jobs);
+  }, [jobs, persistJobs]);
+
+  const finishJob = useCallback((id: string, patch: Partial<BackgroundJob>) => {
+    setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, ...patch } : j)));
+  }, []);
+
+  const completeJobFromRecovery = useCallback(
+    (id: string, label: string, data: unknown) => {
+      resultMap.current.set(id, data);
+      finishJob(id, { status: 'done', finishedAt: Date.now() });
+      const notifyOnly = () => {
+        setBagReady(true);
+        setBagPulse(true);
+        window.setTimeout(() => setBagPulse(false), 420);
+      };
+      const present = presentMap.current.get(id);
+      if (present) {
+        window.setTimeout(() => {
+          if (shouldDeferBackgroundJobPresent() || resultViewOpenRef.current) {
+            notifyOnly();
+            return;
+          }
+          try {
+            present();
+          } catch {
+            notifyOnly();
+          }
+        }, 80);
+      } else if (jobResultDisplayable(label, data)) {
+        notifyOnly();
+      }
+    },
+    [finishJob],
+  );
+
+  const startResumePoll = useCallback(
+    (job: BackgroundJob) => {
+      if (!job.recovery || job.status !== 'running') return;
+      if (resumeStarted.current.has(job.id)) return;
+      resumeStarted.current.add(job.id);
+
+      const started = job.startedAt ?? Date.now();
+      const tick = async () => {
+        if (Date.now() - started > RESUME_MAX_MS) {
+          finishJob(job.id, {
+            status: 'error',
+            error: '等待结果超时，请重新发起',
+            finishedAt: Date.now(),
+          });
+          return;
+        }
+        const current = jobsRef.current.find((j) => j.id === job.id);
+        if (!current || current.status !== 'running') return;
+
+        try {
+          const data = await pollJobRecovery(job.recovery!);
+          if (data && jobResultDisplayable(job.label, data)) {
+            completeJobFromRecovery(job.id, job.label, data);
+            return;
+          }
+        } catch {
+          /* 继续轮询 */
+        }
+        window.setTimeout(tick, RESUME_POLL_MS);
+      };
+      void tick();
+    },
+    [completeJobFromRecovery, finishJob],
+  );
+
+  useEffect(() => {
+    for (const j of jobs) {
+      if (j.status === 'running' && j.recovery) startResumePoll(j);
+    }
+  }, [jobs, startResumePoll]);
 
   const runningCount = jobs.filter((j) => j.status === 'running').length;
   const totalCount = jobs.length;
@@ -97,10 +222,6 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  const finishJob = useCallback((id: string, patch: Partial<BackgroundJob>) => {
-    setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, ...patch } : j)));
-  }, []);
-
   const dismissJob = useCallback((id: string) => {
     setJobs((prev) => prev.filter((j) => j.id !== id));
     presentMap.current.delete(id);
@@ -110,8 +231,18 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
   const runJob = useCallback(
     <T,>(opts: RunJobOptions<T>) => {
       const id = nextId();
+      const startedAt = Date.now();
       setJobs((prev) =>
-        [{ id, label: opts.label, status: 'running' as const }, ...prev].slice(0, MAX_JOBS),
+        [
+          {
+            id,
+            label: opts.label,
+            status: 'running' as const,
+            startedAt,
+            recovery: opts.recovery,
+          },
+          ...prev,
+        ].slice(0, MAX_JOBS),
       );
       if (opts.present) presentMap.current.set(id, opts.present);
       spawnThrow(opts.throwFrom);
@@ -125,9 +256,17 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
           const present = presentMap.current.get(id);
           if (present) {
             window.setTimeout(() => {
-              if (shouldDeferBackgroundJobPresent()) {
+              const notifyOnly = () => {
+                setBagReady(true);
                 setBagPulse(true);
                 window.setTimeout(() => setBagPulse(false), 420);
+              };
+              if (shouldDeferBackgroundJobPresent()) {
+                notifyOnly();
+                return;
+              }
+              if (resultViewOpenRef.current) {
+                notifyOnly();
                 return;
               }
               try {
@@ -159,6 +298,7 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
   const openJobPresent = useCallback((job: BackgroundJob) => {
     if (job.status === 'running') return;
 
+    setBagReady(false);
     setPanelOpen(false);
 
     const show = () => {
@@ -227,10 +367,15 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
             <button
               type="button"
               id={BAG_ID}
-              className={`lx-bg-bag ${bagPulse ? 'lx-bg-bag-pulse' : ''} ${runningCount ? 'lx-bg-bag-active' : ''}`}
+              className={`lx-bg-bag ${bagPulse ? 'lx-bg-bag-pulse' : ''} ${runningCount ? 'lx-bg-bag-active' : ''} ${bagReady ? 'lx-bg-bag-ready' : ''}`}
               aria-label={`后台任务 ${totalCount} 项，点击查看列表`}
               aria-expanded={panelOpen}
-              onClick={() => setPanelOpen((v) => !v)}
+              onClick={() => {
+                setPanelOpen((v) => {
+                  if (!v) setBagReady(false);
+                  return !v;
+                });
+              }}
             >
               <span className="lx-bg-bag-pocket" aria-hidden />
               <span className="lx-bg-bag-count">{totalCount > 99 ? '99+' : totalCount}</span>

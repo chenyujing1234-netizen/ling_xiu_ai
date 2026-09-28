@@ -3,6 +3,11 @@ import { handler, body, intParam, bad } from '@/lib/api';
 import { requireSession, HttpError } from '@/lib/auth';
 import { db, today } from '@/lib/db';
 import { attachNoteReviewFlags } from '@/lib/note-review';
+import {
+  consolidateVerseTextNotes,
+  joinVerseNoteParts,
+  persistMergedTextNotesPerVerse,
+} from '@/lib/verse-notes-merge';
 
 const TextNote = z.object({
   bookId: z.number().int().positive(),
@@ -21,13 +26,21 @@ export async function GET(req: Request) {
 
     if (bookId) {
       const chapter = intParam(req, 'chapter');
-      const rows = await db()
+      const conn = db();
+      const bid = Number(bookId);
+      await persistMergedTextNotesPerVerse(conn, session.uid, bid, chapter);
+      const rows = await conn
         .prepare(
           `SELECT id, book_id, chapter, verse, kind, content, media_path, god_spoke, created_at
              FROM verse_notes WHERE user_id = ? AND book_id = ? AND chapter = ? ORDER BY verse, id`,
         )
-        .all(session.uid, Number(bookId), chapter);
-      return { notes: await attachNoteReviewFlags(rows as { id: number; content: string }[]) };
+        .all(session.uid, bid, chapter);
+      const withReview = await attachNoteReviewFlags(rows as { id: number; content: string }[]);
+      return {
+        notes: consolidateVerseTextNotes(
+          withReview as unknown as Parameters<typeof consolidateVerseTextNotes>[0],
+        ),
+      };
     }
 
     // 全部笔记（我的页面用），带经卷名
@@ -52,7 +65,34 @@ export async function POST(req: Request) {
     const data = await body(req, TextNote);
     if (!data.content) bad('笔记内容不能为空');
 
-    const info = await db()
+    const conn = db();
+    const existing = await conn
+      .prepare(
+        `SELECT id, content FROM verse_notes
+         WHERE user_id = ? AND book_id = ? AND chapter = ? AND verse = ? AND kind = 'text'
+         ORDER BY id`,
+      )
+      .all(session.uid, data.bookId, data.chapter, data.verse);
+
+    if (existing.length > 0) {
+      const primaryId = existing[0]!.id;
+      const merged = joinVerseNoteParts([
+        ...existing.map((r) => r.content as string),
+        data.content,
+      ]);
+      await conn
+        .prepare(`UPDATE verse_notes SET content = ? WHERE id = ? AND user_id = ?`)
+        .run(merged, primaryId, session.uid);
+      for (let i = 1; i < existing.length; i++) {
+        await conn
+          .prepare(`DELETE FROM verse_notes WHERE id = ? AND user_id = ?`)
+          .run(existing[i]!.id, session.uid);
+      }
+      await markEngaged(session.uid, data.bookId, data.chapter);
+      return { id: primaryId, merged: true };
+    }
+
+    const info = await conn
       .prepare(
         `INSERT INTO verse_notes
            (user_id, book_id, chapter, verse, kind, content, god_spoke, devotion_id)

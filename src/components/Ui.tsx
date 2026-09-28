@@ -155,6 +155,33 @@ export function NoteReviewedBadge({ className }: { className?: string }) {
   );
 }
 
+/** 经节旁：查看本节圣经背景 */
+export function VerseBackgroundButton({
+  onClick,
+  disabled,
+  className,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={`ml-1 inline-flex shrink-0 align-middle items-center rounded-md border border-line bg-surface/90 px-1.5 py-0.5 text-[10px] font-bold leading-none text-muted hover:text-brand-700 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40 ${className ?? ''}`}
+      aria-label="查看本节圣经背景"
+    >
+      背景
+    </button>
+  );
+}
+
 /** 经节旁：生成本节配图（需阻止冒泡，避免触发长按） */
 export function VerseImageButton({
   onClick,
@@ -230,6 +257,30 @@ export function IconTile({
   return <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${bg}`}>{children}</span>;
 }
 
+/** 全屏浮层：左上角返回（与关闭同效，便于发现退出方式） */
+export function SheetBackButton({
+  onClick,
+  disabled,
+  className = '',
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label="返回"
+      className={`absolute left-3 top-3 z-20 flex h-9 items-center rounded-full border border-line/90 bg-card/95 px-3 text-[13px] font-semibold text-brand-700 shadow-soft active:bg-brand-50 disabled:opacity-50 ${className}`}
+      style={{ top: 'calc(var(--safe-t, 0px) + 12px)' }}
+    >
+      ← 返回
+    </button>
+  );
+}
+
 /** 底部弹层 / 对话框：统一右上角关闭（父容器需 `relative`） */
 export function SheetCloseButton({
   onClick,
@@ -247,6 +298,7 @@ export function SheetCloseButton({
       disabled={disabled}
       aria-label="关闭"
       className={`absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-line/90 bg-card/95 text-[18px] leading-none text-muted shadow-soft active:bg-brand-50 disabled:opacity-50 ${className}`}
+      style={{ top: 'calc(var(--safe-t, 0px) + 12px)' }}
     >
       ×
     </button>

@@ -2,6 +2,7 @@
 
 import SheetModal from './SheetModal';
 import RagSourcesFootnote from './RagSourcesFootnote';
+import JobResultScriptureBlock from './JobResultScriptureBlock';
 import type { JobResultView } from '@/lib/background-job-result';
 
 /** 从任务列表点「查看」时，在顶层展示结果（不依赖原页面是否还挂着） */
@@ -16,12 +17,14 @@ export default function BackgroundJobResultSheet({
     view.kind === 'image' ? view.caption : view.kind === 'questions' ? view.title : view.title;
 
   return (
-    <SheetModal onClose={onClose} zBackdrop={210} zSheet={220}>
-      <div className="sticky top-0 z-10 bg-card px-5 pb-2 pt-3 pr-12">
+    <SheetModal onClose={onClose} zBackdrop={210} zSheet={220} fullScreen>
+      <div className="sticky top-0 z-10 bg-card px-5 pb-2 pt-3 pl-[4.5rem] pr-12">
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
         <p className="chip line-clamp-2">{title}</p>
       </div>
       <div className="px-5 pb-6 pt-2">
+        <JobResultScriptureBlock jobLabel={title} />
+
         {view.kind === 'image' && (
           <figure>
             {/* eslint-disable-next-line @next/next/no-img-element */}

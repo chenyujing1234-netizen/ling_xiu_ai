@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import DevotionHome, { type HomeTab } from '@/components/DevotionHome';
+import ExploreView from '@/components/ExploreView';
 import { api, hardNavigate } from '@/lib/client';
 import BookPicker, { type BookBrief } from './BookPicker';
 import { useAutoSaveDevotionText } from './useAutoSaveDevotionText';
@@ -9,6 +12,7 @@ import {
   IconLongPress,
   IconScripture,
   NoteReviewedBadge,
+  VerseBackgroundButton,
   VerseImageButton,
   VerseLongPressHint,
 } from '@/components/Ui';
@@ -16,6 +20,7 @@ import { joinDictation } from '@/lib/dictate';
 import Dictate from './Dictate';
 import NoteSheet, { type NoteEdit, type VerseTarget } from './NoteSheet';
 import VerseImageSheet from './VerseImageSheet';
+import VerseBackgroundSheet from './VerseBackgroundSheet';
 import PageBackButton from './PageBackButton';
 import SheetModal from './SheetModal';
 import ChapterNotesReviewBlock from './ChapterNotesReviewBlock';
@@ -25,6 +30,8 @@ import RagSourcesFootnote from './RagSourcesFootnote';
 import type { RagSource } from '@/lib/rag-sources';
 import { useBackgroundJobs } from './BackgroundJobsProvider';
 import { DEVOTION_AI_ACTIONS, DEVOTION_AI_LABELS } from '@/lib/background-ai';
+import { devotionRecoveryForAction } from '@/lib/background-job-recovery';
+import { isCombinedDevotionUi, type Stage as DevotionStage } from '@/lib/devotion-stages';
 const LONG_PRESS_MS = 450;
 
 const FEEDBACK_STAGE_TITLE: Record<string, string> = {
@@ -82,15 +89,6 @@ type Detail = {
   stageFeedbackRagSources?: Partial<Record<FeedbackStageKey, RagSource[]>>;
 };
 
-const STEPS: { key: Stage; label: string }[] = [
-  { key: 'observe', label: '观察' },
-  { key: 'inquire', label: '提问' },
-  { key: 'reflect', label: '默想' },
-  { key: 'guided', label: '引导' },
-  { key: 'life', label: '实事' },
-  { key: 'prayer', label: '祷告' },
-];
-
 const LAYER_LABEL: Record<string, string> = {
   fact: '事实层',
   flow: '脉络层',
@@ -116,6 +114,8 @@ type AdvanceResult = {
 };
 
 export default function DevotionFlow({ id }: { id: number }) {
+  const searchParams = useSearchParams();
+  const flowTab: HomeTab = searchParams.get('tab') === 'explore' ? 'explore' : 'devotion';
   const [d, setD] = useState<Detail | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -176,13 +176,11 @@ export default function DevotionFlow({ id }: { id: number }) {
               const from = adv.feedbackFor
                 ? FEEDBACK_STAGE_TITLE[adv.feedbackFor] ?? adv.feedbackFor
                 : '这一步';
-              const fb = {
+              feedbackPresentRef.current = {
                 from,
                 text: adv.feedback.trim(),
                 ragSources: adv.feedbackRagSources,
               };
-              feedbackPresentRef.current = fb;
-              setStageFeedback(fb);
             }
           }
           return res;
@@ -192,25 +190,37 @@ export default function DevotionFlow({ id }: { id: number }) {
         }
       };
 
-      setBusy(true);
-
       if (useBg) {
         const label = DEVOTION_AI_LABELS[action] ?? '灵修生成';
         const { promise } = runJob({
           label: `灵修 · ${label}`,
+          recovery: devotionRecoveryForAction(action, id),
           task: execute,
+          onSuccess: (res) => {
+            if (payload.action === 'advance') {
+              const adv = res as AdvanceResult | null;
+              if (adv?.feedback?.trim() && !adv.feedbackSkipped) {
+                const from = adv.feedbackFor
+                  ? FEEDBACK_STAGE_TITLE[adv.feedbackFor] ?? adv.feedbackFor
+                  : '这一步';
+                feedbackPresentRef.current = {
+                  from,
+                  text: adv.feedback.trim(),
+                  ragSources: adv.feedbackRagSources,
+                };
+              }
+            }
+          },
           present: () => {
             const fb = feedbackPresentRef.current;
             if (fb) setStageFeedback(fb);
           },
         });
-        try {
-          return await promise;
-        } finally {
-          setBusy(false);
-        }
+        void promise.catch(() => {});
+        return null;
       }
 
+      setBusy(true);
       try {
         return await execute();
       } finally {
@@ -279,7 +289,18 @@ export default function DevotionFlow({ id }: { id: number }) {
   if (!d) return <p className="py-20 text-center text-sm text-muted">加载中…</p>;
 
   const stage = d.devotion.stage;
-  const stageIndex = STEPS.findIndex((s) => s.key === stage);
+
+  const explorePanel =
+    books.length > 0 ? (
+      <ExploreView
+        key={`${d.devotion.book_id}-${d.devotion.chapter}`}
+        books={books}
+        initialBook={d.devotion.book_id}
+        initialChapter={d.devotion.chapter}
+      />
+    ) : (
+      <p className="py-20 text-center text-sm text-muted">加载书目…</p>
+    );
 
   return (
     <div>
@@ -292,99 +313,73 @@ export default function DevotionFlow({ id }: { id: number }) {
         />
       )}
 
-      <header className="sticky top-0 z-30 border-b border-line bg-paper/95 px-4 py-3 backdrop-blur">
-        <div className="flex items-center gap-2">
-          <PageBackButton fallback="/devotion" />
-          {stage !== 'observe' && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => act({ action: 'retreat' })}
-              className="btn-ghost shrink-0 px-3 py-2 text-sm"
-            >
-              ← 上一步
-            </button>
+      <DevotionHome initialTab={flowTab} devotionLabel="灵修" explore={explorePanel}>
+        <>
+          <header className="sticky top-11 z-30 border-b border-line bg-paper/95 px-4 py-3 backdrop-blur">
+            <div className="flex items-center gap-2">
+              <PageBackButton fallback="/devotion" />
+              <button
+                type="button"
+                disabled={busy}
+                onClick={openChapterPicker}
+                className="btn-ghost flex min-w-0 flex-1 items-center gap-1 px-3 py-2 text-left"
+                aria-label="更换经卷章节"
+              >
+                <span className="truncate text-[17px] font-bold leading-snug">{d.passage.label}</span>
+                <svg
+                  className="h-4 w-4 shrink-0 text-muted"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden
+                >
+                  <path d="M6 9l6 6 6-6" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+            {stage !== 'done' && (
+              <p className="mt-2 text-center text-[11px] font-semibold text-brand-600">一起默想</p>
+            )}
+          </header>
+
+          {pickerOpen && d && (
+            books.length > 0 ? (
+              <BookPicker
+                books={books}
+                current={{ book: d.devotion.book_id, chapter: d.devotion.chapter }}
+                title="换一章灵修"
+                onClose={() => setPickerOpen(false)}
+                onPick={switchChapter}
+              />
+            ) : (
+              <>
+                <div className="fixed inset-0 z-40 bg-ink/35 fade-in" onClick={() => setPickerOpen(false)} />
+                <p className="sheet z-40 py-10 text-center text-sm text-muted">加载书目…</p>
+              </>
+            )
           )}
-          <button
-            type="button"
-            disabled={busy}
-            onClick={openChapterPicker}
-            className="btn-ghost flex min-w-0 flex-1 items-center gap-1 px-3 py-2 text-left"
-            aria-label="更换经卷章节"
-          >
-            <span className="truncate text-[17px] font-bold leading-snug">{d.passage.label}</span>
-            <svg
-              className="h-4 w-4 shrink-0 text-muted"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              aria-hidden
-            >
-              <path d="M6 9l6 6 6-6" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
-        <Stepper current={stageIndex} stage={stage} />
-      </header>
 
-      {pickerOpen && d && (
-        books.length > 0 ? (
-          <BookPicker
-            books={books}
-            current={{ book: d.devotion.book_id, chapter: d.devotion.chapter }}
-            title="换一章灵修"
-            onClose={() => setPickerOpen(false)}
-            onPick={switchChapter}
-          />
-        ) : (
-          <>
-            <div className="fixed inset-0 z-40 bg-ink/35 fade-in" onClick={() => setPickerOpen(false)} />
-            <p className="sheet z-40 py-10 text-center text-sm text-muted">加载书目…</p>
-          </>
-        )
-      )}
+          <div className="px-4 py-4">
+            {error && (
+              <p className="mb-4 rounded-xl bg-accent/10 px-4 py-3 text-sm text-accent">{error}</p>
+            )}
 
-      <div className="px-4 py-4">
-        {error && (
-          <p className="mb-4 rounded-xl bg-accent/10 px-4 py-3 text-sm text-accent">{error}</p>
-        )}
-
-        {stage === 'observe' && (
-          <ObserveStage d={d} act={act} sync={sync} busy={busy} reload={load} onViewSavedFeedback={onViewSavedFeedback} />
-        )}
-        {stage === 'inquire' && (
-          <InquireStage d={d} act={act} sync={sync} busy={busy} reload={load} onViewSavedFeedback={onViewSavedFeedback} />
-        )}
-        {stage === 'reflect' && (
-          <ReflectStage
-            d={d}
-            act={act}
-            sync={sync}
-            busy={busy}
-            reload={load}
-            onViewSavedFeedback={onViewSavedFeedback}
-          />
-        )}
-        {stage === 'guided' && (
-          <GuidedStage
-            d={d}
-            act={act}
-            sync={sync}
-            busy={busy}
-            reload={load}
-            onViewSavedFeedback={onViewSavedFeedback}
-          />
-        )}
-        {stage === 'life' && (
-          <LifeStage d={d} act={act} sync={sync} busy={busy} reload={load} onViewSavedFeedback={onViewSavedFeedback} />
-        )}
-        {stage === 'prayer' && (
-          <PrayerStage d={d} act={act} sync={sync} busy={busy} reload={load} onViewSavedFeedback={onViewSavedFeedback} />
-        )}
-        {stage === 'done' && <DoneStage d={d} />}
-      </div>
-
+            {isCombinedDevotionUi(stage as DevotionStage) && (
+              <CombinedPrepStage
+                d={d}
+                act={act}
+                sync={sync}
+                busy={busy}
+                reload={load}
+                onViewSavedFeedback={onViewSavedFeedback}
+                reportError={setError}
+              />
+            )}
+            {stage === 'done' && <DoneStage d={d} devotionId={id} />}
+          </div>
+        </>
+      </DevotionHome>
     </div>
   );
 }
@@ -398,36 +393,8 @@ type StageProps = {
   busy: boolean;
   reload: () => Promise<void>;
   onViewSavedFeedback: (stage: FeedbackStageKey) => void;
+  reportError?: (message: string) => void;
 };
-
-// ---------- 进度条 ----------
-
-function Stepper({ current, stage }: { current: number; stage: Stage }) {
-  return (
-    <ol className="mt-2.5 flex items-center gap-1">
-      {STEPS.map((s, i) => {
-        const done = stage === 'done' || i < current;
-        const active = i === current;
-        return (
-          <li key={s.key} className="flex flex-1 flex-col items-center gap-1">
-            <span
-              className={`h-1.5 w-full rounded-full transition ${
-                done
-                  ? 'bg-brand-500 shadow-[0_0_8px_rgb(var(--tw-brand-500)/0.45)]'
-                  : active
-                    ? 'bg-brand-400 shadow-[0_0_10px_rgb(var(--tw-brand-400)/0.5)]'
-                    : 'bg-line'
-              }`}
-            />
-            <span className={`text-[10px] ${active ? 'font-bold text-brand-600' : done ? 'font-medium text-brand-500' : 'text-muted'}`}>
-              {s.label}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
 
 // ---------- 经文（可折叠，长按写笔记） ----------
 
@@ -461,6 +428,7 @@ function Passage({
   const [open, setOpen] = useState(true);
   const [target, setTarget] = useState<VerseTarget | null>(null);
   const [imageTarget, setImageTarget] = useState<VerseTarget | null>(null);
+  const [backgroundTarget, setBackgroundTarget] = useState<VerseTarget | null>(null);
   const [editing, setEditing] = useState<NoteEdit | null>(null);
   const [pressing, setPressing] = useState<number | null>(null);
 
@@ -620,6 +588,18 @@ function Passage({
                         )}
                       </span>
                     )}
+                    <VerseBackgroundButton
+                      onClick={() =>
+                        setBackgroundTarget({
+                          bookId,
+                          bookName,
+                          chapter,
+                          verse: v.verse,
+                          cn: v.cn,
+                          en: v.en ?? '',
+                        })
+                      }
+                    />
                     <VerseImageButton
                       onClick={() =>
                         setImageTarget({
@@ -703,6 +683,14 @@ function Passage({
           target={imageTarget}
           onClose={() => setImageTarget(null)}
           onReopen={(t) => setImageTarget(t)}
+        />
+      )}
+
+      {backgroundTarget && (
+        <VerseBackgroundSheet
+          target={backgroundTarget}
+          onClose={() => setBackgroundTarget(null)}
+          onReopen={(t) => setBackgroundTarget(t)}
         />
       )}
     </section>
@@ -820,7 +808,7 @@ function NextButton({
 }: {
   gate: { ok: boolean; reason?: string };
   onNext: () => void;
-  busy: boolean;
+  busy?: boolean;
   label?: string;
   savedFeedback?: string;
   feedbackStage?: FeedbackStageKey;
@@ -831,8 +819,8 @@ function NextButton({
       {feedbackStage && onViewSavedFeedback && (
         <SavedStageFeedbackButton stage={feedbackStage} feedback={savedFeedback} onView={onViewSavedFeedback} />
       )}
-      <button className="btn-primary w-full py-3" onClick={onNext} disabled={busy || !gate.ok}>
-        {busy ? '陪读者在读你写的内容…' : label}
+      <button className="btn-primary w-full py-3" onClick={onNext} disabled={Boolean(busy) || !gate.ok}>
+        {busy ? '处理中…' : label}
       </button>
       {!gate.ok && gate.reason && (
         <p className="mt-2 text-center text-xs text-muted">{gate.reason}</p>
@@ -1011,7 +999,324 @@ function StageFeedbackSheet({
   );
 }
 
-// ---------- 1. 观察 ----------
+function DevotionWriteSection({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="mb-8 border-b border-line/80 pb-8 last:mb-0 last:border-0 last:pb-0">
+      <h3 className="text-[17px] font-bold tracking-tight text-ink">{title}</h3>
+      {hint && <p className="mt-1.5 text-[14px] leading-relaxed text-muted">{hint}</p>}
+      <div className="mt-3">{children}</div>
+    </section>
+  );
+}
+
+/** 观察 + 提问 + 默想：同一页按顺序写，不必分步点「下一步」 */
+function CombinedPrepStage({ d, act, sync, busy, reload, onViewSavedFeedback, reportError }: StageProps) {
+  const { runJob } = useBackgroundJobs();
+  const [nudges, setNudges] = useState<string[] | null>(null);
+  const [nudgeBusy, setNudgeBusy] = useState(false);
+  const [loadingPrompts, setLoadingPrompts] = useState(false);
+  const [scoreResult, setScoreResult] = useState<{
+    total: number;
+    unlocked: boolean;
+    scores: Score[];
+    encouragement: string;
+    degraded: boolean;
+    ragSources?: RagSource[];
+  } | null>(null);
+  const asked = useRef(false);
+  const { readingCompact, onVerseScroll } = useReadingCompact();
+
+  const observations = d.inputs.filter((i) => i.kind === 'observation');
+  const questions = d.inputs.filter((i) => i.kind === 'question');
+  const savedAnswers = d.inputs.filter((i) => i.kind === 'answer');
+
+  const obsDraft = useAutoSaveDevotionText({
+    save: sync,
+    kind: 'observation',
+    minChars: 2,
+  });
+  const obsArchived = observations.filter((i) => i.id !== obsDraft.draftId);
+
+  const qDraft = useAutoSaveDevotionText({
+    save: sync,
+    kind: 'question',
+    minChars: 5,
+    resetAfterSave: false,
+  });
+  const qListed = questions.filter((q) => q.id !== qDraft.draftId);
+
+  useEffect(() => {
+    if (d.prompts.length || asked.current) return;
+    asked.current = true;
+    setLoadingPrompts(true);
+    const { promise } = runJob({
+      label: '灵修 · 默想思考题',
+      recovery: { kind: 'devotionPrompts', devotionId: d.devotion.id },
+      task: () => api(`/api/devotion/${d.devotion.id}/action`, { json: { action: 'prompts' } }),
+      onError: (err) => reportError?.(err.message),
+      present: () => void reload(),
+    });
+    void promise.finally(() => {
+      setLoadingPrompts(false);
+      void reload();
+    });
+  }, [d.prompts.length, d.devotion.id, reload, runJob, reportError]);
+
+  async function askForHelp() {
+    setNudgeBusy(true);
+    const { promise } = runJob({
+      label: '观察参考题',
+      recovery: {
+        kind: 'devotionNudge',
+        book: d.devotion.book_id,
+        chapter: d.devotion.chapter,
+      },
+      task: () =>
+        api<{ questions: string[] }>(
+          `/api/devotion/nudge?book=${d.devotion.book_id}&chapter=${d.devotion.chapter}`,
+        ),
+      onSuccess: (res) => setNudges(res.questions),
+      present: () => {
+        document.querySelector('[data-nudge-panel]')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      },
+    });
+    try {
+      await promise;
+    } finally {
+      setNudgeBusy(false);
+    }
+  }
+
+  function evaluate() {
+    if (!savedAnswers.length) return;
+    const { promise } = runJob({
+      label: '灵修 · 默想评估',
+      recovery: { kind: 'devotionScore', devotionId: d.devotion.id },
+      task: () =>
+        api<typeof scoreResult>(`/api/devotion/${d.devotion.id}/action`, {
+          json: { action: 'score' },
+        }),
+      onSuccess: (res) => setScoreResult(res),
+      onError: (err) => reportError?.(err.message),
+      present: () => void reload(),
+    });
+    void promise.then(() => reload());
+  }
+
+  return (
+    <div>
+      <StageIntro title="一起默想这一章" compact={readingCompact}>
+        下面三块可以按你的节奏写，<strong className="font-medium text-ink">不用按顺序点下一步</strong>。
+        先写看见的、再写想问的、最后回答默想题；写够后评估一次，就能请陪读者引导。
+      </StageIntro>
+
+      <DevotionPassage
+        d={d}
+        reload={reload}
+        readingCompact={readingCompact}
+        onVerseScroll={onVerseScroll}
+        emphasis
+      />
+
+      <DevotionWriteSection
+        title="1 · 我看见的"
+        hint="只写经文里确实存在的内容：谁、在哪里、做了什么。还不用写感想。"
+      >
+        {obsArchived.length > 0 && (
+          <ul className="mb-3 space-y-2">
+            {obsArchived.map((i) => (
+              <li key={i.id} className="card flex items-start gap-2 px-4 py-3">
+                <p className="flex-1 text-[14px] leading-relaxed">{i.content}</p>
+                <button
+                  type="button"
+                  className="btn-ghost shrink-0 px-2 py-1 text-xs"
+                  onClick={() => act({ action: 'removeInput', inputId: i.id })}
+                >
+                  删除
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <textarea
+          className="field min-h-[110px] resize-none"
+          placeholder="按顺序写几条你看见的……不全也没关系"
+          value={obsDraft.text}
+          onChange={(e) => obsDraft.setText(e.target.value)}
+          onBlur={obsDraft.onBlur}
+        />
+        <div className="mt-1.5 flex items-center justify-between gap-2">
+          <span className="text-xs text-muted">
+            已保存 {observations.length} 条 · 停笔自动保存
+          </span>
+          <Dictate onText={(t) => obsDraft.setText((prev) => joinDictation(prev, t))} disabled={busy} />
+        </div>
+        <div className="mt-4 border-t border-line pt-3" data-nudge-panel>
+          {!nudges ? (
+            <button
+              type="button"
+              className="btn-secondary py-2.5 text-sm"
+              onClick={askForHelp}
+              disabled={nudgeBusy}
+            >
+              {nudgeBusy ? '参考题生成中…' : '需要灵感？看几道参考题'}
+            </button>
+          ) : (
+            <div className="rounded-lg bg-brand-50/60 px-3 py-2.5">
+              <p className="label mb-2">参考题（可选，挑一题写在上面）</p>
+              <ul className="space-y-2">
+                {nudges.map((q, i) => (
+                  <li key={i} className="text-[14px] leading-relaxed text-ink/90">
+                    {i + 1}. {q}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </DevotionWriteSection>
+
+      <DevotionWriteSection
+        title="2 · 我想问的"
+        hint="写下读经时心里冒出来的疑问。问你自己也答不上来的，最好。"
+      >
+        {qListed.length > 0 && (
+          <ul className="mb-3 space-y-2">
+            {qListed.map((q, n) => (
+              <li key={q.id} className="card flex items-start gap-2 px-4 py-3">
+                <span className="mt-0.5 text-xs text-brand-300">{n + 1}</span>
+                <p className="flex-1 text-[14px] leading-relaxed">{q.content}</p>
+                <button
+                  type="button"
+                  className="btn-ghost shrink-0 px-2 py-1 text-xs"
+                  onClick={() => act({ action: 'removeInput', inputId: q.id })}
+                >
+                  删除
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <input
+          className="field w-full"
+          placeholder="写下你的一个问题…"
+          value={qDraft.text}
+          onChange={(e) => qDraft.setText(e.target.value)}
+          onBlur={qDraft.onBlur}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void qDraft.flushNow();
+            }
+          }}
+        />
+        <div className="mt-1.5 flex items-center justify-between gap-2">
+          <p className="text-xs text-muted">至少 1 个问题 · 停笔自动保存</p>
+          <Dictate
+            onText={(t) => qDraft.setText((prev) => joinDictation(prev, t, ' '))}
+            disabled={busy}
+            hint="说完自动填进问题框"
+          />
+        </div>
+      </DevotionWriteSection>
+
+      <DevotionWriteSection
+        title="3 · 默想作答"
+        hint="不是考试。可按需提交评估（后台进行），写够观察、提问与作答后即可完成本次灵修。"
+      >
+        {questions.length > 0 && (
+          <div className="mb-3 rounded-xl bg-brand-50/60 px-3 py-2.5">
+            <p className="label mb-1.5">你提的问题（引导会先回应它们）</p>
+            <ul className="space-y-1">
+              {questions.map((q, i) => (
+                <li key={q.id} className="text-[13px] leading-relaxed text-brand-700">
+                  {i + 1}. {q.content}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {loadingPrompts && (
+          <p className="mb-3 text-center text-xs text-brand-700">默想题在后台生成，请看右上角红点袋</p>
+        )}
+
+        <div className="space-y-3">
+          {d.prompts.map((p) => {
+            const mine = savedAnswers.find((a) => a.prompt_id === p.id);
+            return (
+              <ReflectAnswerField
+                key={`${p.id}-${mine?.id ?? 'new'}`}
+                promptId={p.id}
+                question={p.question}
+                layer={p.layer}
+                bridge={p.bridge}
+                saved={mine}
+                sync={sync}
+                busy={busy}
+                onRemove={() => mine && act({ action: 'removeInput', inputId: mine.id })}
+              />
+            );
+          })}
+        </div>
+
+        <div className="mt-6">
+          {(scoreResult || d.scores.length > 0) && (
+            <ScoreCard
+              total={scoreResult?.total ?? d.devotion.score}
+              unlockScore={d.unlockScore}
+              scores={scoreResult?.scores ?? d.scores}
+              encouragement={scoreResult?.encouragement}
+              degraded={scoreResult?.degraded}
+              ragSources={scoreResult?.ragSources}
+            />
+          )}
+
+          <button
+            type="button"
+            className="btn-secondary mt-3 w-full py-3"
+            onClick={evaluate}
+            disabled={!savedAnswers.length}
+          >
+            {d.scores.length ? '重新提交评估（后台）' : '提交评估（后台，不阻塞）'}
+          </button>
+          {!savedAnswers.length && (
+            <p className="mt-2 text-center text-xs text-muted">先回答至少一道默想题</p>
+          )}
+          {savedAnswers.length > 0 && (
+            <p className="mt-2 text-center text-xs text-muted">
+              评估在红点袋进行，完成后可在任务列表查看；不阻塞完成灵修
+            </p>
+          )}
+
+          <div className="mt-4 space-y-2">
+            <SavedStageFeedbackButton
+              stage="reflect"
+              feedback={d.stageFeedbacks?.reflect}
+              onView={onViewSavedFeedback}
+            />
+            <NextButton
+              gate={d.gate}
+              busy={busy}
+              onNext={() => act({ action: 'complete' })}
+              label="完成这次灵修"
+            />
+          </div>
+        </div>
+      </DevotionWriteSection>
+    </div>
+  );
+}
+
+// ---------- 1. 观察（旧分步，保留供参考/回退） ----------
 
 function ObserveStage({ d, act, sync, busy, reload, onViewSavedFeedback }: StageProps) {
   const { runJob } = useBackgroundJobs();
@@ -1031,6 +1336,11 @@ function ObserveStage({ d, act, sync, busy, reload, onViewSavedFeedback }: Stage
     setNudgeBusy(true);
     const { promise } = runJob({
       label: '观察参考题',
+      recovery: {
+        kind: 'devotionNudge',
+        book: d.devotion.book_id,
+        chapter: d.devotion.chapter,
+      },
       task: () =>
         api<{ questions: string[] }>(
           `/api/devotion/nudge?book=${d.devotion.book_id}&chapter=${d.devotion.chapter}`,
@@ -1277,7 +1587,7 @@ function ReflectAnswerField({
       <div className="mt-2.5">
         <textarea
           className="field min-h-[86px] resize-none"
-          placeholder="考一考：这道题你怎么答？想到什么写什么，不用组织得很漂亮"
+          placeholder="想到什么写什么，不用组织得很漂亮"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onBlur={onBlur}
@@ -1538,14 +1848,24 @@ function GuidedStage({ d, act, busy, reload, onViewSavedFeedback }: StageProps) 
     [],
   );
 
+  useEffect(() => {
+    if (d.devotion.unlocked) return;
+    const t = window.setInterval(() => {
+      void reload();
+    }, 3500);
+    return () => window.clearInterval(t);
+  }, [d.devotion.unlocked, reload]);
+
   // 首次进入本阶段：用 SSE 逐字接收引导，避免干等 1-2 分钟
   useEffect(() => {
+    if (!d.devotion.unlocked) return;
     if (coachMsgs.length || requested.current) return;
     requested.current = true;
     let cancelled = false;
 
     const { promise } = runJob({
       label: '灵修 · 引导',
+      recovery: { kind: 'devotionCoach', devotionId: d.devotion.id },
       task: async () => {
         if (cancelled) return;
         setPhase('thinking');
@@ -1599,7 +1919,7 @@ function GuidedStage({ d, act, busy, reload, onViewSavedFeedback }: StageProps) 
     return () => {
       cancelled = true;
     };
-  }, [coachMsgs.length, d.devotion.id, reload, runJob]);
+  }, [coachMsgs.length, d.devotion.id, d.devotion.unlocked, reload, runJob]);
 
   return (
     <div>
@@ -1616,7 +1936,11 @@ function GuidedStage({ d, act, busy, reload, onViewSavedFeedback }: StageProps) 
         emphasis
       />
 
-      <QuizMeButton targetRef={answerRef} />
+      {!d.devotion.unlocked && (
+        <p className="mb-3 rounded-xl border border-dashed border-brand-200 bg-brand-50/70 px-4 py-3 text-sm text-brand-800">
+          默想评估若在后台进行中，达标后会自动开始引导；也可在右上角红点袋查看进度。
+        </p>
+      )}
 
       {streamError && (
         <p className="mb-3 rounded-xl bg-accent/10 px-4 py-3 text-sm text-accent">{streamError}</p>
@@ -1667,12 +1991,12 @@ function GuidedStage({ d, act, busy, reload, onViewSavedFeedback }: StageProps) 
         ))}
       </div>
 
-      <AnswerZone zoneRef={answerRef} title="考一考 · 回应答题区">
+      <AnswerZone zoneRef={answerRef} title="回应陪读者">
         {(coachMsgs.length > 0 || phase === 'done') ? (
           <>
             <textarea
               className="field min-h-[86px] resize-none"
-              placeholder="考一考：陪读者哪一点触动了你？写一句回应或你的不同意…"
+              placeholder="哪一点触动了你？写一句回应，或你的不同意…"
               value={text}
               onChange={(e) => setText(e.target.value)}
               onBlur={() => {
@@ -1703,7 +2027,7 @@ function GuidedStage({ d, act, busy, reload, onViewSavedFeedback }: StageProps) 
           </>
         ) : (
           <p className="py-2 text-sm leading-relaxed text-muted">
-            陪读者的回应出来以后，在这里考一考自己、写下你的回应。
+            陪读者的回应出来以后，在这里写下你的回应。
           </p>
         )}
       </AnswerZone>
@@ -1740,9 +2064,7 @@ function LifeStage({ d, act, sync, busy, reload, onViewSavedFeedback }: StagePro
         emphasis
       />
 
-      <QuizMeButton targetRef={answerRef} />
-
-      <AnswerZone zoneRef={answerRef} title="考一考 · 生命实事答题区">
+      <AnswerZone zoneRef={answerRef} title="生命里的实事">
         {archived.length > 0 && (
           <ul className="mb-3 space-y-2">
             {archived.map((f) => (
@@ -1762,7 +2084,7 @@ function LifeStage({ d, act, sync, busy, reload, onViewSavedFeedback }: StagePro
 
         <textarea
           className="field min-h-[120px] resize-none"
-          placeholder="考一考：这周有没有一件真实的小事，和刚才读的经文对得上？"
+          placeholder="这周有没有一件真实的小事，和刚才读的经文对得上？"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onBlur={onBlur}
@@ -1830,9 +2152,7 @@ function PrayerStage({ d, act, sync, busy, reload, onViewSavedFeedback: _onViewS
         </div>
       )}
 
-      <QuizMeButton targetRef={answerRef} />
-
-      <AnswerZone zoneRef={answerRef} title="考一考 · 祷告答题区">
+      <AnswerZone zoneRef={answerRef} title="祷告">
         {archived.length > 0 && (
           <ul className="mb-3 space-y-2">
             {archived.map((p) => (
@@ -1852,7 +2172,7 @@ function PrayerStage({ d, act, sync, busy, reload, onViewSavedFeedback: _onViewS
 
         <textarea
           className="field min-h-[140px] resize-none"
-          placeholder="考一考：主啊，今天这段经文和你刚才想起的事，你想对神说什么？"
+          placeholder="主啊，今天这段经文和你刚才想起的事，你想对神说什么？"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onBlur={onBlur}
@@ -1870,7 +2190,7 @@ function PrayerStage({ d, act, sync, busy, reload, onViewSavedFeedback: _onViewS
 
 // ---------- 7. 完成卡片 ----------
 
-function DoneStage({ d }: { d: Detail }) {
+function DoneStage({ d, devotionId }: { d: Detail; devotionId: number }) {
   const pick = (kind: string) => d.inputs.filter((i) => i.kind === kind);
   const sections: [string, Input[]][] = [
     ['我看见的', pick('observation')],
@@ -1924,11 +2244,8 @@ function DoneStage({ d }: { d: Detail }) {
       </div>
 
       <div className="mt-5 flex gap-2">
-        <Link
-          href={`/devotion?tab=explore&book=${d.devotion.book_id}&chapter=${d.devotion.chapter}`}
-          className="btn-ghost flex-1"
-        >
-          看这章的图谱
+        <Link href={`/devotion/${devotionId}?tab=explore`} className="btn-ghost flex-1">
+          看这章的经文资料
         </Link>
         <Link href="/devotion" className="btn-primary flex-1">
           返回灵修列表

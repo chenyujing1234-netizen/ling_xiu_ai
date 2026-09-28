@@ -1,5 +1,6 @@
 import { db } from './db';
 import { retrieveBookRagContext, type BookRagRetrieveInput } from './book-rag';
+import { FIXED_BACKGROUND_RAG_KB_IDS } from './rag-kb-background';
 import { mergeRagSources, type RagSource } from './rag-sources';
 
 export type KnowledgeForLlmResult = {
@@ -27,6 +28,17 @@ export async function knowledgeForLlm(input: BookRagRetrieveInput): Promise<Know
   const knowledge = [rag.text, local.text].filter((s) => s.trim()).join('\n\n---\n\n');
   const ragSources = mergeRagSources(rag.sources, local.text && local.source ? [local.source] : []);
   return { knowledge, ragSources };
+}
+
+/** 单节圣经背景：只查固定历史/叙事类书库，不叠加本地 docs */
+export async function knowledgeForVerseBackground(
+  input: BookRagRetrieveInput,
+): Promise<KnowledgeForLlmResult> {
+  const rag = await retrieveBookRagContext(input, {
+    kbIds: FIXED_BACKGROUND_RAG_KB_IDS,
+    querySuffix: '历史背景 年代 地理 宗教 社会 文化处境',
+  });
+  return { knowledge: rag.text, ragSources: rag.sources };
 }
 
 /** @deprecated 请用 knowledgeForLlm */

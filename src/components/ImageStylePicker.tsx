@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  IMAGE_STYLES,
+  imageStylesOrdered,
   readStoredImageStyle,
   writeStoredImageStyle,
   type ImageStyleId,
@@ -17,6 +17,8 @@ type Props = {
 };
 
 export default function ImageStylePicker({ value, onChange, compact, disabled }: Props) {
+  const styles = useMemo(() => imageStylesOrdered(value), [value]);
+
   function pick(id: ImageStyleId) {
     if (disabled || id === value) return;
     writeStoredImageStyle(id);
@@ -28,7 +30,7 @@ export default function ImageStylePicker({ value, onChange, compact, disabled }:
       <div className="space-y-1.5">
         <p className="text-[11px] font-medium text-muted">画面风格</p>
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5 no-bar">
-          {IMAGE_STYLES.map((s) => {
+          {styles.map((s) => {
             const active = value === s.id;
             return (
               <button
@@ -55,7 +57,7 @@ export default function ImageStylePicker({ value, onChange, compact, disabled }:
     <div className="space-y-2">
       <p className="text-xs font-medium text-muted">选择你喜欢的画面风格，生成时会写入提示词</p>
       <ul className="space-y-2">
-        {IMAGE_STYLES.map((s) => {
+        {styles.map((s) => {
           const active = value === s.id;
           return (
             <li key={s.id}>
@@ -81,11 +83,8 @@ export default function ImageStylePicker({ value, onChange, compact, disabled }:
   );
 }
 
-/** 挂载后从 localStorage 读取默认风格 */
+/** 默认风格：与设置页、单节/选段配图共用 localStorage */
 export function usePreferredImageStyle(): [ImageStyleId, (id: ImageStyleId) => void] {
-  const [style, setStyle] = useState<ImageStyleId>('classic');
-  useEffect(() => {
-    setStyle(readStoredImageStyle());
-  }, []);
+  const [style, setStyle] = useState<ImageStyleId>(() => readStoredImageStyle());
   return [style, setStyle];
 }

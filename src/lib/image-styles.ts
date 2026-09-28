@@ -107,3 +107,11 @@ export function writeStoredImageStyle(id: ImageStyleId) {
     /* ignore */
   }
 }
+
+/** 上次使用的风格排在最前，便于横向芯片与列表一眼点到 */
+export function imageStylesOrdered(preferredId?: ImageStyleId | null): ImageStyleMeta[] {
+  const id = normalizeImageStyle(preferredId ?? undefined);
+  const head = IMAGE_STYLES.find((s) => s.id === id);
+  if (!head) return [...IMAGE_STYLES];
+  return [head, ...IMAGE_STYLES.filter((s) => s.id !== id)];
+}

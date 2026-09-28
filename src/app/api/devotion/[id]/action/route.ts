@@ -7,6 +7,10 @@ import {
   updateInput,
   setStage,
   canAdvance,
+  canAdvancePrep,
+  canAdvancePrepContent,
+  isPrepStage,
+  isCombinedDevotionUi,
   nextStage,
   ensurePrompts,
   scoreDevotion,
@@ -20,6 +24,7 @@ import {
   saveStageFeedback,
   FEEDBACK_ON_ADVANCE,
   retreatStage,
+  MIN_ANSWER_CHARS,
   type Stage,
   type FeedbackStage,
 } from '@/lib/devotion';
@@ -46,6 +51,7 @@ const Schema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('guide') }),
   z.object({ action: z.literal('coach'), text: z.string().trim().min(1).max(2000) }),
   z.object({ action: z.literal('advance') }),
+  z.object({ action: z.literal('finishPrep') }),
   z.object({ action: z.literal('retreat') }),
   z.object({ action: z.literal('complete') }),
 ]);
@@ -63,9 +69,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       case 'input': {
         // 阶段与输入类型必须匹配 —— 防止绕过前端直接往后面阶段塞内容
         const allowed: Record<string, Stage[]> = {
-          observation: ['observe'],
-          question: ['inquire', 'observe'],
-          answer: ['reflect'],
+          observation: ['observe', 'inquire', 'reflect'],
+          question: ['inquire', 'observe', 'reflect'],
+          answer: ['reflect', 'observe', 'inquire'],
           life_fact: ['life', 'guided'],
           prayer: ['prayer', 'life'],
         };
@@ -86,9 +92,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           .get<{ kind: string }>(payload.inputId, d.id);
         if (!row) notFound('记录不存在');
         const allowed: Record<string, Stage[]> = {
-          observation: ['observe'],
-          question: ['inquire', 'observe'],
-          answer: ['reflect'],
+          observation: ['observe', 'inquire', 'reflect'],
+          question: ['inquire', 'observe', 'reflect'],
+          answer: ['reflect', 'observe', 'inquire'],
           life_fact: ['life', 'guided'],
           prayer: ['prayer', 'life'],
         };
@@ -120,10 +126,20 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         return { prompts: await ensurePrompts(d) };
 
       case 'score': {
-        // 必须先有作答才能评分
-        const gate = await canAdvance({ ...d, stage: 'reflect', score: 0, unlocked: 0 });
-        if (!gate.ok && gate.reason?.includes('请先回答')) bad(gate.reason);
-        const result = await scoreDevotion(d);
+        const fresh = (await getDevotion(d.id, session.uid))!;
+        if (!isPrepStage(fresh.stage) && fresh.stage !== 'reflect') {
+          throw new HttpError(409, '当前阶段不能评估');
+        }
+        const inputs = await inputsOf(d.id);
+        const chars = inputs
+          .filter((i) => i.kind === 'answer')
+          .map((i) => i.content)
+          .join('\n')
+          .replace(/\s/g, '').length;
+        if (!inputs.some((i) => i.kind === 'answer') || chars < MIN_ANSWER_CHARS) {
+          bad('请先回答默想里的至少一题');
+        }
+        const result = await scoreDevotion(fresh);
         return result;
       }
 
@@ -152,8 +168,20 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         return await coachReply(fresh, payload.text);
       }
 
+      case 'finishPrep': {
+        const fresh = (await getDevotion(d.id, session.uid))!;
+        if (!isCombinedDevotionUi(fresh.stage)) throw new HttpError(409, '当前不在默想阶段');
+        const gate = await canAdvancePrepContent(fresh);
+        if (!gate.ok) throw new HttpError(409, gate.reason ?? '还不能完成灵修');
+        await completeDevotion(fresh);
+        return { stage: 'done' as Stage };
+      }
+
       case 'advance': {
         const fresh = (await getDevotion(d.id, session.uid))!;
+        if (isCombinedDevotionUi(fresh.stage)) {
+          throw new HttpError(409, '请在本页写完后点「完成这次灵修」');
+        }
         const gate = await canAdvance(fresh);
         if (!gate.ok) throw new HttpError(409, gate.reason ?? '还不能进入下一步');
         const fromStage = fresh.stage;
@@ -170,12 +198,23 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
             feedbackSkipped = true;
             feedbackRagSources = parseRagSources(cached.rag_sources);
           } else {
-            const fb = await stageFeedback(fresh, fromStage);
-            feedback = fb.feedback;
-            feedbackRagSources = fb.ragSources;
-            if (feedback?.trim()) {
-              await saveStageFeedback(fresh.id, fbStage, hash, feedback.trim(), fb.ragSources);
-            }
+            const devotionId = fresh.id;
+            void (async () => {
+              try {
+                const fb = await stageFeedback(fresh, fbStage);
+                if (fb.feedback?.trim()) {
+                  await saveStageFeedback(
+                    devotionId,
+                    fbStage,
+                    hash,
+                    fb.feedback.trim(),
+                    fb.ragSources,
+                  );
+                }
+              } catch (err) {
+                console.warn('[devotion:stageFeedback:bg]', (err as Error).message);
+              }
+            })();
           }
         }
 
@@ -207,8 +246,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
       case 'complete': {
         const fresh = (await getDevotion(d.id, session.uid))!;
-        const gate = await canAdvance(fresh);
-        if (!gate.ok) throw new HttpError(409, gate.reason ?? '还有步骤没有完成');
+        const gate = isCombinedDevotionUi(fresh.stage)
+          ? await canAdvancePrepContent(fresh)
+          : await canAdvance(fresh);
+        if (!gate.ok) throw new HttpError(409, gate.reason ?? '还有内容没写完');
         await completeDevotion(fresh);
         return { stage: 'done' };
       }

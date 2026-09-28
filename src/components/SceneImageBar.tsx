@@ -69,6 +69,7 @@ export default function SceneImageBar({
     const { promise } = runJob({
       label: `配图 ${label}`,
       throwFrom,
+      recovery: { kind: 'insights', query: `kind=image&${q}` },
       task: () =>
         api<{ data: { url: string | null } }>(`/api/insights?kind=image&${q}${refresh}`),
       onSuccess: (res) => {

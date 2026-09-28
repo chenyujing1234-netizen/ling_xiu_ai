@@ -159,6 +159,14 @@ body {
     padding-bottom: calc(var(--safe-b) + 16px);
     animation: sheet-up 0.24s cubic-bezier(0.32, 0.72, 0, 1);
   }
+
+  .sheet-fullscreen {
+    @apply inset-0 bottom-0 top-0 rounded-none border-t-0;
+    height: 100dvh;
+    max-height: 100dvh;
+    padding-top: calc(var(--safe-t) + 4px);
+    padding-bottom: calc(var(--safe-b) + 16px);
+  }
 }
 
 @keyframes sheet-up {
@@ -314,6 +322,18 @@ body {
   color: #fff;
   line-height: 1;
   text-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+}
+
+/* 有已完成任务待查看，且未自动展开结果层 */
+.lx-bg-bag-ready .lx-bg-bag-count {
+  color: #d3f9d8;
+  text-shadow:
+    0 0 6px rgb(81 207 102 / 0.95),
+    0 1px 2px rgb(0 0 0 / 0.35);
+}
+
+.lx-bg-bag-ready.lx-bg-bag-active .lx-bg-bag-count {
+  color: #b2f2bb;
 }
 
 .lx-bg-job-backdrop {

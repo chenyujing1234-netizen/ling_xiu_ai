@@ -76,6 +76,7 @@ export default function VerseSceneImage({
     const { promise } = runJob({
       label: jobLabel,
       throwFrom,
+      recovery: { kind: 'insights', query: `kind=image&${q}` },
       task: () =>
         api<{ data: { url: string | null } }>(`/api/insights?kind=image&${q}${refresh}`),
       onSuccess: (res) => {

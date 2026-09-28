@@ -53,7 +53,7 @@ export default function NoteReviewBlock({
   const [open, setOpen] = useState(false);
   const [review, setReview] = useState<string | null>(null);
   const [ragSources, setRagSources] = useState<RagSource[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [queued, setQueued] = useState(false);
   const [err, setErr] = useState('');
   const [reviewed, setReviewed] = useState(Boolean(readerReviewed));
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -62,9 +62,9 @@ export default function NoteReviewBlock({
     setReviewed(Boolean(readerReviewed));
   }, [readerReviewed, noteId]);
 
-  async function loadReview() {
+  function loadReview() {
     setErr('');
-    setBusy(true);
+    setQueued(true);
 
     const rect = btnRef.current?.getBoundingClientRect();
     const throwFrom = rect
@@ -74,6 +74,7 @@ export default function NoteReviewBlock({
     const { promise } = runJob({
       label: `笔记点评 ${refLabel}`,
       throwFrom,
+      recovery: { kind: 'noteReview', noteId },
       task: async () => {
         let res = await api<{ review: string | null; cached: boolean; ragSources?: RagSource[] }>(
           `/api/notes/${noteId}/review?cacheOnly=1`,
@@ -97,13 +98,7 @@ export default function NoteReviewBlock({
       present: () => setOpen(true),
     });
 
-    try {
-      await promise;
-    } catch {
-      /* handled */
-    } finally {
-      setBusy(false);
-    }
+    void promise.catch(() => {});
   }
 
   return (
@@ -114,7 +109,7 @@ export default function NoteReviewBlock({
           <button
             ref={btnRef}
             type="button"
-            disabled={disabled || busy}
+            disabled={disabled}
             onClick={() => void loadReview()}
             className={
               compact
@@ -122,11 +117,11 @@ export default function NoteReviewBlock({
                 : 'btn-secondary flex-1 py-2.5'
             }
           >
-            {busy ? '后台生成中…' : reviewed ? '再看陪读者点评' : '陪读者点评'}
+            {reviewed ? '再看陪读者点评' : '陪读者点评'}
           </button>
         </div>
-        {busy && (
-          <p className="text-[10px] text-brand-700">请看右上角红点袋，完成后会自动弹出点评</p>
+        {queued && (
+          <p className="text-[10px] text-brand-700">已转入后台，请看右上角红点袋；完成后会自动弹出点评</p>
         )}
       </div>
       {err && <p className="mt-1 text-[11px] text-accent">{err}</p>}

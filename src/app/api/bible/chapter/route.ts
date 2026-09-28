@@ -3,6 +3,10 @@ import { requireSession } from '@/lib/auth';
 import { getBook, getChapter, allBooks } from '@/lib/bible';
 import { db, today } from '@/lib/db';
 import { attachNoteReviewFlags } from '@/lib/note-review';
+import {
+  consolidateVerseTextNotes,
+  persistMergedTextNotesPerVerse,
+} from '@/lib/verse-notes-merge';
 
 export async function GET(req: Request) {
   return handler(async () => {
@@ -16,16 +20,8 @@ export async function GET(req: Request) {
 
     const conn = db();
     // 一章经文要凑齐经文、笔记、讲道资源、书目，同时发出去
-    const [verses, notes, resources, bookList] = await Promise.all([
+    const [verses, resources, bookList] = await Promise.all([
       getChapter(bookId, chapter),
-      // 该章已有的笔记，标在经文旁边
-      conn
-        .prepare(
-          `SELECT id, verse, kind, content, media_path, god_spoke, created_at
-           FROM verse_notes WHERE user_id = ? AND book_id = ? AND chapter = ?
-           ORDER BY verse, id`,
-        )
-        .all(session.uid, bookId, chapter),
       // 覆盖本章的讲道资源（R-F2）
       conn
         .prepare(
@@ -49,10 +45,22 @@ export async function GET(req: Request) {
       testament: b.testament,
     }));
 
+    await persistMergedTextNotesPerVerse(conn, session.uid, bookId, chapter);
+    const freshNotes = await conn
+      .prepare(
+        `SELECT id, verse, kind, content, media_path, god_spoke, created_at
+         FROM verse_notes WHERE user_id = ? AND book_id = ? AND chapter = ?
+         ORDER BY verse, id`,
+      )
+      .all(session.uid, bookId, chapter);
+
     const notesWithReview = await attachNoteReviewFlags(
-      notes as { id: number; content: string }[],
+      freshNotes as { id: number; content: string }[],
+    );
+    const notesMerged = consolidateVerseTextNotes(
+      notesWithReview as unknown as Parameters<typeof consolidateVerseTextNotes>[0],
     );
 
-    return { book, chapter, verses, notes: notesWithReview, resources, books };
+    return { book, chapter, verses, notes: notesMerged, resources, books };
   });
 }

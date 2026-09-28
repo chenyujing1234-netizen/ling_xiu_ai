@@ -3,6 +3,7 @@ import { requireSession } from '@/lib/auth';
 import {
   getElements,
   getContextInsight,
+  getVerseBackground,
   getGraph,
   getMindmap,
   getSceneImage,
@@ -38,6 +39,22 @@ export async function GET(req: Request) {
       }
       const ctx = await getContextInsight(bookId, chapter, verse, force);
       return { kind, data: ctx.data, ragSources: ctx.ragSources };
+    }
+
+    if (kind === 'background') {
+      const verse = intParam(req, 'verse');
+      const backgroundRefresh = url.searchParams.get('refresh') === '1';
+      if (cacheOnly) {
+        const hit = await readCachedInsight(bookId, chapter, kind, { verse });
+        return hit ? { kind, data: hit.data, ragSources: hit.ragSources } : { kind, data: null };
+      }
+      const bg = await getVerseBackground(
+        bookId,
+        chapter,
+        verse,
+        force || backgroundRefresh,
+      );
+      return { kind, data: bg.data, ragSources: bg.ragSources };
     }
 
     const from = intParam(req, 'from', 1);

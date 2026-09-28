@@ -16,6 +16,7 @@ export function insightsAiLabel(kind: string): string {
     mindmap: '思维导图',
     image: '意境配图',
     context: '上下文分析',
+    background: '圣经背景',
   };
   return map[kind] ?? '经文洞察';
 }

@@ -3,6 +3,7 @@ import { chatJson, MODELS, aiConfigured, generateImage } from './ai';
 import {
   elementsPrompt,
   contextPrompt,
+  verseBackgroundPrompt,
   graphPrompt,
   mindmapPrompt,
   imagePromptFor,
@@ -11,7 +12,7 @@ import {
 import { getBook, getRange, passageText, refKey, refLabel, contextWindow, getVerse } from './bible';
 import { saveSceneImage } from './media';
 import { parseRagSources, serializeRagSources, type RagSource } from './rag-sources';
-import { knowledgeForLlm } from './knowledge-context';
+import { knowledgeForLlm, knowledgeForVerseBackground } from './knowledge-context';
 import { imageInsightCacheKind, normalizeImageStyle } from './image-styles';
 
 // ---------- 类型 ----------
@@ -34,6 +35,15 @@ export type ContextInsight = {
   hinge: string;
   misread: string;
   cn_en: string;
+};
+
+/** 单节历史与文化背景（固定背景书库 + LLM 整理） */
+export type VerseBackground = {
+  era: string;
+  place_people: string;
+  custom: string;
+  parallel: string;
+  for_verse: string;
 };
 
 export type GraphData = {
@@ -237,6 +247,58 @@ export async function getContextInsight(
           },
         ],
         { model: MODELS.fast(), maxTokens: 9000 },
+      );
+      return { data, ragSources: knowledgeCtx.ragSources };
+    },
+    force,
+  );
+}
+
+export async function getVerseBackground(
+  bookId: number,
+  chapter: number,
+  verse: number,
+  force = false,
+): Promise<InsightResult<VerseBackground>> {
+  const key = contextKey(bookId, chapter, verse);
+  return cached<VerseBackground>(
+    key,
+    'background',
+    async () => {
+      if (!aiConfigured()) throw new Error('AI 未配置，无法生成圣经背景');
+      const book = await getBook(bookId);
+      const [target, { before, after }] = await Promise.all([
+        getVerse(bookId, chapter, verse),
+        contextWindow(bookId, chapter, verse, 6),
+      ]);
+      const ref = await refLabel(bookId, chapter, verse);
+      const verseText = `${target?.cn ?? ''}${target?.en ? `\n[EN] ${target.en}` : ''}`;
+      const knowledgeCtx = await knowledgeForVerseBackground({
+        ref,
+        bookName: book?.name_cn,
+        passage: verseText,
+        focus: passageText(before, 'cn') + passageText(after, 'cn'),
+      });
+      const data = await chatJson<VerseBackground>(
+        [
+          {
+            role: 'system',
+            content: '你熟悉圣经历史地理与第二圣殿犹太处境，只输出 JSON。',
+          },
+          {
+            role: 'user',
+            content: verseBackgroundPrompt({
+              ref,
+              bookName: book?.name_cn ?? '',
+              genre: book?.genre ?? '叙事',
+              verseText,
+              before: passageText(before, 'cn'),
+              after: passageText(after, 'cn'),
+              knowledge: knowledgeCtx.knowledge,
+            }),
+          },
+        ],
+        { model: MODELS.fast(), maxTokens: 6000 },
       );
       return { data, ragSources: knowledgeCtx.ragSources };
     },

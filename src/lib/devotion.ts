@@ -23,8 +23,15 @@ import { knowledgeForLlm } from './knowledge-context';
 import { parseRagSources, serializeRagSources, type RagSource } from './rag-sources';
 import { clampNoteReviewLength } from './note-review';
 
-export { STAGES, STAGE_META, type Stage } from './devotion-stages';
-import { STAGES, type Stage } from './devotion-stages';
+export {
+  STAGES,
+  STAGE_META,
+  PREP_STAGES,
+  isPrepStage,
+  isCombinedDevotionUi,
+  type Stage,
+} from './devotion-stages';
+import { STAGES, isPrepStage, type Stage } from './devotion-stages';
 
 export type Devotion = {
   id: number;
@@ -156,6 +163,52 @@ export async function setStage(devotionId: number, stage: Stage) {
 
 async function touch(devotionId: number) {
   await db().prepare(`UPDATE devotions SET updated_at = NOW() WHERE id = ?`).run(devotionId);
+}
+
+/** 合并默想页：仅校验是否写够（不要求评估已结束） */
+export async function canAdvancePrepContent(
+  d: Devotion,
+): Promise<{ ok: boolean; reason?: string }> {
+  const inputs = await inputsOf(d.id);
+  const text = (kind: string) =>
+    inputs.filter((i) => i.kind === kind).map((i) => i.content).join('\n');
+
+  const obs = inputs.filter((i) => i.kind === 'observation' && i.content.trim().length > 0).length;
+  if (obs < MIN_OBSERVATION_ENTRIES) {
+    return { ok: false, reason: '先写下你看见的，至少一条' };
+  }
+
+  const qs = inputs.filter((i) => i.kind === 'question' && i.content.trim().length > 4).length;
+  if (qs < MIN_QUESTIONS) {
+    return { ok: false, reason: '再写下至少一个你自己的问题' };
+  }
+
+  const answers = inputs.filter((i) => i.kind === 'answer');
+  const chars = text('answer').replace(/\s/g, '').length;
+  if (!answers.length || chars < MIN_ANSWER_CHARS) {
+    return { ok: false, reason: '请先回答默想里的至少一题' };
+  }
+
+  return { ok: true };
+}
+
+/** 合并默想页：三项都满足且评估解锁后，才可进入陪读引导 */
+export async function canAdvancePrep(d: Devotion): Promise<{ ok: boolean; reason?: string }> {
+  const inputs = await inputsOf(d.id);
+  const text = (kind: string) =>
+    inputs.filter((i) => i.kind === kind).map((i) => i.content).join('\n');
+
+  const content = await canAdvancePrepContent(d);
+  if (!content.ok) return content;
+
+  if (d.score < UNLOCK_SCORE() || !d.unlocked) {
+    return {
+      ok: false,
+      reason: `写完后点「评估」，达到 ${UNLOCK_SCORE()} 分即可请陪读者引导`,
+    };
+  }
+
+  return { ok: true };
 }
 
 /** 校验能否从当前阶段前进 —— 服务端强制，前端隐藏不算约束 */

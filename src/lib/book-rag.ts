@@ -31,6 +31,13 @@ export type BookRagRetrieveInput = {
   focus?: string;
 };
 
+export type BookRagRetrieveOptions = {
+  /** 只检索这些知识库 id；不传则用管理员启用的全库 */
+  kbIds?: readonly string[];
+  /** 检索词后缀（如强调「历史背景」） */
+  querySuffix?: string;
+};
+
 const BASE = () => (process.env.BOOK_RAG_BASE_URL || 'http://124.222.77.32:8081/api/v1').replace(/\/$/, '');
 const API_KEY = () => process.env.BOOK_RAG_API_KEY || '';
 const TOP_K = () => Math.min(Math.max(Number(process.env.BOOK_RAG_TOP_K) || 2, 1), 12);
@@ -52,9 +59,15 @@ function bookNameFromRef(ref?: string): string {
   return m?.[1]?.replace(/·.*$/, '') ?? '';
 }
 
-function buildQuery(input: BookRagRetrieveInput): string {
+function buildQuery(input: BookRagRetrieveInput, opts?: BookRagRetrieveOptions): string {
   const book = input.bookName || bookNameFromRef(input.ref);
-  const parts = [book, input.ref, input.focus?.trim(), input.passage?.trim().slice(0, 500)].filter(Boolean);
+  const parts = [
+    book,
+    input.ref,
+    input.focus?.trim(),
+    input.passage?.trim().slice(0, 500),
+    opts?.querySuffix?.trim(),
+  ].filter(Boolean);
   return parts.join(' ').replace(/\s+/g, ' ').slice(0, 600);
 }
 
@@ -180,14 +193,20 @@ function sourcesFromHits(hits: SearchHit[], kbNameById: Map<string, string>): { 
 }
 
 /** 从 book_rag 检索与当前经文/用户输入相关的书摘，供 LLM 参考 */
-export async function retrieveBookRagContext(input: BookRagRetrieveInput): Promise<BookRagRetrieveResult> {
+export async function retrieveBookRagContext(
+  input: BookRagRetrieveInput,
+  opts?: BookRagRetrieveOptions,
+): Promise<BookRagRetrieveResult> {
   const empty = { text: '', searched: [] as { id: string; name: string }[], sources: [] as { id: string; name: string }[] };
   if (!bookRagConfigured()) return empty;
 
-  const query = buildQuery(input);
+  const query = buildQuery(input, opts);
   if (query.length < 4) return empty;
 
-  const [kbs, wantedIds] = await Promise.all([listKnowledgeBases(), getEnabledRagKbIds()]);
+  const [kbs, wantedIds] = await Promise.all([
+    listKnowledgeBases(),
+    opts?.kbIds?.length ? Promise.resolve([...opts.kbIds]) : getEnabledRagKbIds(),
+  ]);
   if (!kbs.length || !wantedIds.length) return empty;
 
   const live = new Map(kbs.map((k) => [k.id, k.name]));

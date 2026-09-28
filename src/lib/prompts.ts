@@ -353,6 +353,43 @@ ${bookRagKnowledgeSection(input.knowledge)}
 "reflection":["",""]}`;
 }
 
+/** 单节经文：历史与文化背景（参考指定书库摘录，不编造年代） */
+export function verseBackgroundPrompt(input: {
+  ref: string;
+  bookName: string;
+  genre: string;
+  verseText: string;
+  before: string;
+  after: string;
+  knowledge?: string;
+}): string {
+  return `读者想理解这一节的**圣经背景**（不是灵修感想，也不是教义结论）。
+
+经文出处：${input.ref}（${input.bookName}，文体参考：${input.genre}）
+本节正文：
+${input.verseText}
+
+【前后文节选（帮助定位）】
+前：${input.before || '（节首）'}
+后：${input.after || '（节末）'}
+${bookRagKnowledgeSection(input.knowledge)}
+
+请写 JSON，帮助普通读者「知道当时发生了什么、为何重要」：
+- era：时代与政治宗教大环境（约多少年、谁掌权、犹太/外邦处境）。不确定写「约…」并说明推断。
+- place_people：地点、族群、关键人物身份（第二圣殿、会堂、罗马税吏等要解释）。
+- custom：与本节相关的习俗、制度或语言背景（若无则写「无明显特殊习俗」）。
+- parallel：圣经内或历史上**同期**可对照的一两件事（含中国大致朝代若可推断）。
+- for_verse：用 2–4 句说明：以上背景如何帮助读懂**这一节**（紧扣节文，不要讲整卷）。
+
+约束：
+1. 优先依据上方「书库摘录」；摘录未覆盖处可写常识性背景，但勿编造精确年号或伪考古。
+2. 每条 80–220 字，口语清楚，不用 Markdown 标题。
+3. 不要输出解经结论或应用号召。
+
+只输出 JSON：
+{"era":"","place_people":"","custom":"","parallel":"","for_verse":""}`;
+}
+
 /** 上下文透视：前 10 节与后 10 节对本节的影响（R-B4） */
 export function contextPrompt(input: {
   ref: string;

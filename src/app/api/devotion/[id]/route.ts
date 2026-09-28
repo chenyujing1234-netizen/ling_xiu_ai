@@ -4,6 +4,10 @@ import {
   getDevotion,
   inputsOf,
   canAdvance,
+  canAdvancePrep,
+  canAdvancePrepContent,
+  isPrepStage,
+  isCombinedDevotionUi,
   STAGE_META,
   UNLOCK_SCORE,
   stageFeedbacksMap,
@@ -13,6 +17,10 @@ import { resolveRange } from '@/lib/insights';
 import { db } from '@/lib/db';
 import { chapterNotesReviewStatus } from '@/lib/chapter-notes-review';
 import { attachNoteReviewFlags } from '@/lib/note-review';
+import {
+  consolidateVerseTextNotes,
+  persistMergedTextNotesPerVerse,
+} from '@/lib/verse-notes-merge';
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   return handler(async () => {
@@ -26,7 +34,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     const showCoach = ['guided', 'life', 'prayer', 'done'].includes(d.stage);
 
     // 这几项互不依赖，一次并发发出去；数据库在外网，串起来问就是七倍的等待
-    const [r, inputs, prompts, scores, coach, notes, gate, stageFeedbacks, stageFeedbackRagSources] =
+    const [r, inputs, prompts, scores, coach, gate, stageFeedbacks, stageFeedbackRagSources] =
       await Promise.all([
       resolveRange(d.book_id, d.chapter, d.verse_start, d.verse_end),
       inputsOf(d.id),
@@ -47,13 +55,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
             )
             .all(d.id)
         : Promise.resolve([]),
-      conn
-        .prepare(
-          `SELECT id, verse, kind, content, media_path, god_spoke FROM verse_notes
-           WHERE user_id = ? AND book_id = ? AND chapter = ? ORDER BY verse, id`,
-        )
-        .all(session.uid, d.book_id, d.chapter),
-      canAdvance(d),
+      isCombinedDevotionUi(d.stage) ? canAdvancePrepContent(d) : canAdvance(d),
       stageFeedbacksMap(d.id),
       stageFeedbackRagSourcesMap(d.id),
     ]);
@@ -68,14 +70,25 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       }),
     );
 
+    await persistMergedTextNotesPerVerse(conn, session.uid, d.book_id, d.chapter);
+    const freshNotes = await conn
+      .prepare(
+        `SELECT id, verse, kind, content, media_path, god_spoke FROM verse_notes
+         WHERE user_id = ? AND book_id = ? AND chapter = ? ORDER BY verse, id`,
+      )
+      .all(session.uid, d.book_id, d.chapter);
+
     const chapterNotesReviewed = await chapterNotesReviewStatus(
       session.uid,
       d.book_id,
       d.chapter,
-      notes as { id: number; verse: number; content: string; god_spoke: number }[],
+      freshNotes as { id: number; verse: number; content: string; god_spoke: number }[],
     );
     const notesWithReview = await attachNoteReviewFlags(
-      notes as { id: number; content: string }[],
+      freshNotes as { id: number; content: string }[],
+    );
+    const notesMerged = consolidateVerseTextNotes(
+      notesWithReview as unknown as Parameters<typeof consolidateVerseTextNotes>[0],
     );
 
     return {
@@ -93,7 +106,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       prompts,
       scores,
       coach: coachOut,
-      notes: notesWithReview,
+      notes: notesMerged,
       chapterNotesReviewed,
       gate,
       stageFeedbacks,

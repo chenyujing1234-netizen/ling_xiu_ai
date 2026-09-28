@@ -182,6 +182,10 @@ function LazyPanel<T>({
     const { promise } = runJob({
       label: `${insightsAiLabel(kind)} · ${book}:${chapter}`,
       throwFrom,
+      recovery: {
+        kind: 'insights',
+        query: `kind=${kind}&book=${book}&chapter=${chapter}${extraQuery}`,
+      },
       task: () =>
         api<{ data: T; unlocked?: boolean; lockedHint?: string; ragSources?: RagSource[] }>(
           `/api/insights?kind=${kind}&book=${book}&chapter=${chapter}${extraQuery}`,

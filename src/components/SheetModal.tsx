@@ -2,7 +2,7 @@
 
 import { useEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { SheetCloseButton } from '@/components/Ui';
+import { SheetBackButton, SheetCloseButton } from '@/components/Ui';
 import { useBindOverlayHistory } from '@/lib/overlay-history';
 
 /**
@@ -15,6 +15,7 @@ export default function SheetModal({
   zSheet = 90,
   className = '',
   closeDisabled,
+  fullScreen = false,
 }: {
   onClose: () => void;
   children: ReactNode;
@@ -22,6 +23,8 @@ export default function SheetModal({
   zSheet?: number;
   className?: string;
   closeDisabled?: boolean;
+  /** 铺满视口时在左上角显示「返回」（与关闭同效） */
+  fullScreen?: boolean;
 }) {
   useBindOverlayHistory(true, onClose);
 
@@ -43,8 +46,14 @@ export default function SheetModal({
         onClick={() => !closeDisabled && onClose()}
         aria-hidden
       />
-      <div className={`sheet max-h-[88vh] overflow-hidden ${className}`} style={{ zIndex: zSheet }}>
+      <div
+        className={`sheet overflow-hidden ${fullScreen ? 'sheet-fullscreen' : 'max-h-[88vh]'} ${className}`}
+        style={{ zIndex: zSheet }}
+      >
         <div className="relative max-h-[inherit] overflow-y-auto no-bar">
+          {fullScreen && (
+            <SheetBackButton onClick={onClose} disabled={closeDisabled} />
+          )}
           <SheetCloseButton onClick={onClose} disabled={closeDisabled} />
           {children}
         </div>

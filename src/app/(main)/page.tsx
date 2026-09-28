@@ -94,7 +94,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         <div className="mb-2 flex items-center justify-between gap-2">
           <SectionTitle icon={<IconBook size={16} />}>今日读经 · {settings.daily_chapters} 章</SectionTitle>
           <Link href="/me/settings" className="flex shrink-0 items-center gap-0.5 text-xs font-semibold text-brand-600">
-            调整
+            字体
           </Link>
         </div>
         <ul className="space-y-2">

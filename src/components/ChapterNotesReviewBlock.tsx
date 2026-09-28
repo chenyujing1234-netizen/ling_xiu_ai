@@ -58,7 +58,7 @@ export default function ChapterNotesReviewBlock({
   const [review, setReview] = useState<string | null>(null);
   const [noteCount, setNoteCount] = useState(textNoteCount);
   const [ragSources, setRagSources] = useState<RagSource[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [queued, setQueued] = useState(false);
   const [err, setErr] = useState('');
   const [reviewed, setReviewed] = useState(Boolean(chapterReviewed));
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -71,9 +71,9 @@ export default function ChapterNotesReviewBlock({
 
   if (textNoteCount < 1) return null;
 
-  async function loadSummary() {
+  function loadSummary() {
     setErr('');
-    setBusy(true);
+    setQueued(true);
 
     const rect = btnRef.current?.getBoundingClientRect();
     const throwFrom = rect
@@ -83,6 +83,7 @@ export default function ChapterNotesReviewBlock({
     const { promise } = runJob({
       label: `本章笔记总结 ${refLabel}`,
       throwFrom,
+      recovery: { kind: 'chapterReview', bookId, chapter },
       task: async () => {
         let res = await api<{
           review: string | null;
@@ -113,13 +114,7 @@ export default function ChapterNotesReviewBlock({
       present: () => setOpen(true),
     });
 
-    try {
-      await promise;
-    } catch {
-      /* handled */
-    } finally {
-      setBusy(false);
-    }
+    void promise.catch(() => {});
   }
 
   return (
@@ -130,15 +125,14 @@ export default function ChapterNotesReviewBlock({
           <button
             ref={btnRef}
             type="button"
-            disabled={busy}
             onClick={() => void loadSummary()}
             className="btn-secondary flex-1 py-2 text-xs"
           >
-            {busy ? '后台生成中…' : reviewed ? '再看本章笔记总结' : '本章笔记总结点评'}
+            {reviewed ? '再看本章笔记总结' : '本章笔记总结点评'}
           </button>
         </div>
-        {busy && (
-          <p className="text-[10px] text-brand-700">请看右上角红点袋，完成后会自动弹出总结</p>
+        {queued && (
+          <p className="text-[10px] text-brand-700">已转入后台，请看右上角红点袋；完成后会自动弹出总结</p>
         )}
       </div>
       {err && <p className="mx-4 mb-2 text-[11px] text-accent">{err}</p>}

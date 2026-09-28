@@ -11,14 +11,21 @@ export type HomeTab = 'devotion' | 'explore';
  */
 export default function DevotionHome({
   initialTab,
+  devotionLabel = '我的灵修',
   explore,
   children,
 }: {
   initialTab: HomeTab;
+  /** 第一个页签文案（灵修列表页为「我的灵修」，进行中灵修为「灵修」） */
+  devotionLabel?: string;
   explore: React.ReactNode;
   children: React.ReactNode;
 }) {
   const [tab, setTab] = useState<HomeTab>(initialTab);
+
+  useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -43,7 +50,7 @@ export default function DevotionHome({
   return (
     <div>
       <div className="sticky top-0 z-40 flex h-11 items-stretch border-b border-line bg-paper/95 px-1 backdrop-blur">
-        {item('devotion', '我的灵修', <IconFlame size={17} />)}
+        {item('devotion', devotionLabel, <IconFlame size={17} />)}
         {item('explore', '经文资料', <IconBook size={17} />)}
       </div>
 
