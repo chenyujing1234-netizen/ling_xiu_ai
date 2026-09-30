@@ -571,14 +571,14 @@ function Passage({
             chapterReviewed={chapterNotesReviewed}
           />
           <div
-            className={`overflow-y-auto px-2 pb-4 no-bar ${
+            className={
               emphasis
-                ? compactHint
-                  ? 'min-h-[50vh] max-h-[calc(100dvh-12.5rem)]'
-                  : 'min-h-[44vh] max-h-[62vh]'
-                : 'max-h-[38vh]'
-            }`}
-            onScroll={(e) => onVerseScroll?.(e.currentTarget.scrollTop)}
+                ? 'px-2 pb-4'
+                : 'max-h-[38vh] overflow-y-auto px-2 pb-4 no-bar'
+            }
+            onScroll={
+              emphasis ? undefined : (e) => onVerseScroll?.(e.currentTarget.scrollTop)
+            }
           >
             {verses.map((v) => {
               const verseNotes = notesByVerse.get(v.verse) ?? [];
@@ -746,6 +746,21 @@ function useReadingCompact() {
   return { readingCompact, onVerseScroll };
 }
 
+/**
+ * 「一起默想」整页滚动：若经文仍在内部小窗里滚，用户滚到底只会看到最后一节，
+ * 下面的「我看见的」等在页面更下方，容易被误以为消失（尤其 compact 时经文区接近全屏）。
+ */
+function useReadingCompactPage() {
+  const [readingCompact, setReadingCompact] = useState(false);
+  useEffect(() => {
+    const sync = () => setReadingCompact(window.scrollY > 48);
+    sync();
+    window.addEventListener('scroll', sync, { passive: true });
+    return () => window.removeEventListener('scroll', sync);
+  }, []);
+  return { readingCompact };
+}
+
 function DevotionPassage({
   d,
   reload,
@@ -756,7 +771,7 @@ function DevotionPassage({
   d: Detail;
   reload: () => Promise<void>;
   readingCompact: boolean;
-  onVerseScroll: (scrollTop: number) => void;
+  onVerseScroll?: (scrollTop: number) => void;
   emphasis?: boolean;
 }) {
   return (
@@ -1015,9 +1030,9 @@ function StageFeedbackSheet({
   onClose: () => void;
 }) {
   return (
-    <SheetModal onClose={onClose} zBackdrop={85} zSheet={95} className="max-h-[75vh]">
+    <SheetModal onClose={onClose} fullScreen>
       <div className="px-5 pb-6">
-        <div className="pt-3 pr-10">
+        <div className="sticky top-0 z-10 bg-card pt-1 pb-2">
           <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
           <p className="text-[15px] font-semibold">陪读者点评</p>
           <p className="mt-0.5 text-xs text-muted">关于你刚完成的「{from}」</p>
@@ -1076,7 +1091,7 @@ function CombinedPrepStage({
     ragSources?: RagSource[];
   } | null>(null);
   const asked = useRef(false);
-  const { readingCompact, onVerseScroll } = useReadingCompact();
+  const { readingCompact } = useReadingCompactPage();
 
   const observations = d.inputs.filter((i) => i.kind === 'observation');
   const questions = d.inputs.filter((i) => i.kind === 'question');
@@ -1177,7 +1192,6 @@ function CombinedPrepStage({
         d={d}
         reload={reload}
         readingCompact={readingCompact}
-        onVerseScroll={onVerseScroll}
         emphasis
       />
 

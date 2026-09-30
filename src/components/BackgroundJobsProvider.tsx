@@ -118,6 +118,11 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
     resultViewOpenRef.current = resultView !== null;
   }, [resultView]);
 
+  const closeResultView = useCallback(() => {
+    resultViewOpenRef.current = false;
+    setResultView(null);
+  }, []);
+
   const persistJobs = useCallback((list: BackgroundJob[]) => {
     const results: Record<string, unknown> = {};
     for (const [id, data] of resultMap.current.entries()) {
@@ -134,33 +139,56 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
     setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, ...patch } : j)));
   }, []);
 
-  const completeJobFromRecovery = useCallback(
-    (id: string, label: string, data: unknown) => {
-      resultMap.current.set(id, data);
-      finishJob(id, { status: 'done', finishedAt: Date.now() });
+  /** 与任务栏点「查看」相同的全屏结果层（带返回/关闭） */
+  const openParsedResultIfAny = useCallback((id: string): boolean => {
+    if (resultViewOpenRef.current) return false;
+    const job = jobsRef.current.find((j) => j.id === id);
+    if (!job) return false;
+    const parsed = parseJobResult(job.label, resultMap.current.get(id));
+    if (!parsed) return false;
+    resultViewOpenRef.current = true;
+    setResultView({ view: parsed });
+    setBagReady(false);
+    return true;
+  }, []);
+
+  const deliverJobPresent = useCallback(
+    (id: string) => {
       const notifyOnly = () => {
         setBagReady(true);
         setBagPulse(true);
         window.setTimeout(() => setBagPulse(false), 420);
       };
+      if (shouldDeferBackgroundJobPresent()) {
+        notifyOnly();
+        return;
+      }
+      /** 正在看某一任务结果时：不抢屏，只提示红点袋（变绿） */
+      if (resultViewOpenRef.current) {
+        notifyOnly();
+        return;
+      }
+      if (openParsedResultIfAny(id)) return;
       const present = presentMap.current.get(id);
-      if (present) {
-        window.setTimeout(() => {
-          if (shouldDeferBackgroundJobPresent() || resultViewOpenRef.current) {
-            notifyOnly();
-            return;
-          }
-          try {
-            present();
-          } catch {
-            notifyOnly();
-          }
-        }, 80);
-      } else if (jobResultDisplayable(label, data)) {
+      if (!present) return;
+      try {
+        present();
+      } catch {
         notifyOnly();
       }
     },
-    [finishJob],
+    [openParsedResultIfAny],
+  );
+
+  const completeJobFromRecovery = useCallback(
+    (id: string, label: string, data: unknown) => {
+      resultMap.current.set(id, data);
+      finishJob(id, { status: 'done', finishedAt: Date.now() });
+      if (presentMap.current.get(id) || jobResultDisplayable(label, data)) {
+        window.setTimeout(() => deliverJobPresent(id), 80);
+      }
+    },
+    [finishJob, deliverJobPresent],
   );
 
   const startResumePoll = useCallback(
@@ -243,30 +271,12 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
     resultMap.current.delete(id);
   }, []);
 
-  const presentSuccess = useCallback((id: string) => {
-    const present = presentMap.current.get(id);
-    if (!present) return;
-    window.setTimeout(() => {
-      const notifyOnly = () => {
-        setBagReady(true);
-        setBagPulse(true);
-        window.setTimeout(() => setBagPulse(false), 420);
-      };
-      if (shouldDeferBackgroundJobPresent()) {
-        notifyOnly();
-        return;
-      }
-      if (resultViewOpenRef.current) {
-        notifyOnly();
-        return;
-      }
-      try {
-        present();
-      } catch {
-        /* 组件已卸载时忽略 */
-      }
-    }, 80);
-  }, []);
+  const presentSuccess = useCallback(
+    (id: string) => {
+      window.setTimeout(() => deliverJobPresent(id), 80);
+    },
+    [deliverJobPresent],
+  );
 
   const executeJobTask = useCallback(
     (id: string, opts: StoredRunOpts): Promise<unknown> =>
@@ -362,6 +372,7 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
     const show = () => {
       if (job.status === 'error') {
         if (job.error?.trim()) {
+          resultViewOpenRef.current = true;
           setResultView({
             view: {
               kind: 'text',
@@ -377,6 +388,7 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
 
       const parsed = parseJobResult(job.label, resultMap.current.get(job.id));
       if (parsed) {
+        resultViewOpenRef.current = true;
         setResultView({ view: parsed });
         return;
       }
@@ -391,6 +403,7 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      resultViewOpenRef.current = true;
       setResultView({
         view: {
           kind: 'text',
@@ -431,7 +444,7 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
             <button
               type="button"
               id={BAG_ID}
-              className={`lx-bg-bag ${bagPulse ? 'lx-bg-bag-pulse' : ''} ${runningCount ? 'lx-bg-bag-active' : ''} ${bagReady ? 'lx-bg-bag-ready' : ''}`}
+              className={`lx-bg-bag ${resultView ? 'lx-bg-bag-over-result' : ''} ${bagPulse ? 'lx-bg-bag-pulse' : ''} ${runningCount ? 'lx-bg-bag-active' : ''} ${bagReady ? 'lx-bg-bag-ready' : ''}`}
               aria-label={`后台任务 ${totalCount} 项，点击查看列表`}
               aria-expanded={panelOpen}
               onClick={() => {
@@ -449,11 +462,15 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
               <>
                 <button
                   type="button"
-                  className="lx-bg-job-backdrop"
+                  className={`lx-bg-job-backdrop ${resultView ? 'lx-bg-job-backdrop-over-result' : ''}`}
                   aria-label="关闭任务列表"
                   onClick={() => setPanelOpen(false)}
                 />
-                <div className="lx-bg-job-panel" role="dialog" aria-label="后台任务列表">
+                <div
+                  className={`lx-bg-job-panel ${resultView ? 'lx-bg-job-panel-over-result' : ''}`}
+                  role="dialog"
+                  aria-label="后台任务列表"
+                >
                   <div className="lx-bg-job-panel-head">
                     <p className="text-sm font-bold text-ink">后台任务</p>
                     <p className="text-[11px] text-muted">
@@ -518,7 +535,7 @@ export function BackgroundJobsProvider({ children }: { children: ReactNode }) {
       {resultView && (
         <BackgroundJobResultSheet
           view={resultView.view}
-          onClose={() => setResultView(null)}
+          onClose={closeResultView}
           onRetry={
             resultView.errorJobId &&
             (() => {

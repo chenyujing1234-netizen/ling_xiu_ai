@@ -19,8 +19,8 @@ export default function BackgroundJobResultSheet({
     view.kind === 'image' ? view.caption : view.kind === 'questions' ? view.title : view.title;
 
   return (
-    <SheetModal onClose={onClose} zBackdrop={210} zSheet={220} fullScreen>
-      <div className="sticky top-0 z-10 bg-card px-5 pb-2 pt-3 pl-[4.5rem] pr-12">
+    <SheetModal onClose={onClose} fullScreen>
+      <div className="sticky top-0 z-10 bg-card px-5 pb-2 pt-3">
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
         <p className="chip line-clamp-2">{title}</p>
       </div>
@@ -67,6 +67,14 @@ export default function BackgroundJobResultSheet({
             ))}
           </ol>
         )}
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-6 w-full rounded-xl border border-line bg-card py-3.5 text-[15px] font-bold text-brand-700 active:bg-brand-50"
+        >
+          完成
+        </button>
       </div>
     </SheetModal>
   );

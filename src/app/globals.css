@@ -164,7 +164,7 @@ body {
     @apply inset-0 bottom-0 top-0 rounded-none border-t-0;
     height: 100dvh;
     max-height: 100dvh;
-    padding-top: calc(var(--safe-t) + 4px);
+    padding-top: 0;
     padding-bottom: calc(var(--safe-b) + 16px);
   }
 }
@@ -253,7 +253,7 @@ body {
   background: linear-gradient(145deg, rgb(var(--tw-brand-400)), rgb(var(--tw-accent)));
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
   pointer-events: none;
-  z-index: 200;
+  z-index: 46;
   animation: lx-throw-to-bag 0.55s cubic-bezier(0.22, 0.85, 0.35, 1) forwards;
 }
 
@@ -261,7 +261,8 @@ body {
   position: fixed;
   top: calc(var(--safe-t, 0px) + 10px);
   right: 12px;
-  z-index: 199;
+  /* 高于底栏(40)，低于 SheetModal(210+) — 避免挡住弹层右上角关闭 */
+  z-index: 45;
   width: 34px;
   height: 34px;
   border: none;
@@ -280,6 +281,12 @@ body {
 
 .lx-bg-bag:active {
   transform: scale(0.96);
+}
+
+/* 正在看任务结果层时：红点袋移到顶栏下方，避免挡住「关闭」，且浮在结果页之上 */
+.lx-bg-bag-over-result {
+  z-index: 225;
+  top: calc(var(--safe-t, 0px) + 54px);
 }
 
 .lx-bg-bag-active {
@@ -336,20 +343,29 @@ body {
   color: #b2f2bb;
 }
 
+.lx-bg-job-backdrop-over-result {
+  z-index: 229;
+}
+
 .lx-bg-job-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 198;
+  z-index: 209;
   border: none;
   background: rgb(0 0 0 / 0.12);
   cursor: default;
+}
+
+.lx-bg-job-panel-over-result {
+  z-index: 230;
+  top: calc(var(--safe-t, 0px) + 96px);
 }
 
 .lx-bg-job-panel {
   position: fixed;
   top: calc(var(--safe-t, 0px) + 48px);
   right: 8px;
-  z-index: 200;
+  z-index: 215;
   width: min(320px, calc(100vw - 16px));
   max-height: min(420px, 58vh);
   display: flex;

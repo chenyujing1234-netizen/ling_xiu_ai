@@ -22,9 +22,9 @@ function SummarySheet({
   onClose: () => void;
 }) {
   return (
-    <SheetModal onClose={onClose} zBackdrop={85} zSheet={95} className="max-h-[75vh]">
+    <SheetModal onClose={onClose} fullScreen>
       <div className="px-5 pb-6">
-        <div className="pt-3 pr-10">
+        <div className="sticky top-0 z-10 bg-card pt-1 pb-2">
           <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
           <p className="text-[15px] font-semibold">本章笔记总结点评</p>
           <p className="mt-0.5 text-xs text-muted">
@@ -35,6 +35,13 @@ function SummarySheet({
           <p className="whitespace-pre-wrap text-[15px] leading-[1.85] text-ink/90">{text}</p>
           <RagSourcesFootnote sources={ragSources} />
         </div>
+        <button
+          type="button"
+          className="mt-5 w-full rounded-xl border border-line bg-card py-3.5 text-[15px] font-bold text-brand-700 active:bg-brand-50"
+          onClick={onClose}
+        >
+          完成
+        </button>
       </div>
     </SheetModal>
   );

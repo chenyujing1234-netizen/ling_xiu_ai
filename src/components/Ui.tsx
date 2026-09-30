@@ -314,7 +314,7 @@ export function SheetBackButton({
       disabled={disabled}
       aria-label="返回"
       className={`absolute left-3 top-3 z-20 flex h-9 items-center rounded-full border border-line/90 bg-card/95 px-3 text-[13px] font-semibold text-brand-700 shadow-soft active:bg-brand-50 disabled:opacity-50 ${className}`}
-      style={{ top: 'calc(var(--safe-t, 0px) + 12px)' }}
+      style={className.includes('static') ? undefined : { top: 'calc(var(--safe-t, 0px) + 12px)' }}
     >
       ← 返回
     </button>

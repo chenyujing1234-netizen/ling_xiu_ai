@@ -68,7 +68,15 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                 : `今天完成了 ${doneCount} / ${plan.length} 章`}
           </h1>
         </div>
-        <ThemePickerButton initial={normalizeTheme(settings.theme)} />
+        <div className="flex shrink-0 items-center gap-2">
+          <ThemePickerButton initial={normalizeTheme(settings.theme)} />
+          <Link
+            href="/me/settings"
+            className="flex h-10 items-center rounded-xl border border-line bg-card px-3 text-xs font-semibold text-brand-600 shadow-soft active:bg-brand-50"
+          >
+            字体
+          </Link>
+        </div>
       </header>
 
       {/* 统计条 */}
@@ -91,11 +99,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
 
       {/* 今日读经计划 */}
       <section className="mb-5">
-        <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="mb-2">
           <SectionTitle icon={<IconBook size={16} />}>今日读经 · {settings.daily_chapters} 章</SectionTitle>
-          <Link href="/me/settings" className="flex shrink-0 items-center gap-0.5 text-xs font-semibold text-brand-600">
-            字体
-          </Link>
         </div>
         <ul className="space-y-2">
           {status.map((s) => (

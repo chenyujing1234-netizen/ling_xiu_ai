@@ -130,8 +130,14 @@ export default function SceneImageBar({
 
       {open && (
         <>
-          <div className="fixed inset-0 z-40 bg-ink/35 fade-in" onClick={() => setOpen(false)} />
-          <div ref={sheetRef} className="sheet relative z-50 max-h-[88vh] overflow-y-auto no-bar px-5 pb-6">
+          <div
+            className="fixed inset-0 z-[210] bg-ink/35 fade-in"
+            onClick={() => setOpen(false)}
+          />
+          <div
+            ref={sheetRef}
+            className="sheet relative z-[220] max-h-[88vh] overflow-y-auto no-bar px-5 pb-6"
+          >
             <SheetCloseButton onClick={() => setOpen(false)} />
             <div className="sticky top-0 z-10 -mx-5 mb-3 bg-card px-5 pt-3 pr-12">
               <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />

@@ -16,8 +16,8 @@ export default function VerseBackgroundSheet({
   const ref = `${target.bookName} ${target.chapter}:${target.verse}`;
 
   return (
-    <SheetModal onClose={onClose}>
-      <div className="sticky top-0 z-10 bg-card px-5 pb-0 pt-3 pr-12">
+    <SheetModal onClose={onClose} fullScreen>
+      <div className="sticky top-0 z-10 bg-card px-5 pb-0 pt-3">
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
         <div className="min-w-0">
           <p className="chip">圣经背景 · {ref}</p>

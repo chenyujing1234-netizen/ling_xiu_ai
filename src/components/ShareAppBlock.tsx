@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { SHARE_APP_VARIANTS, buildShareAppText } from '@/lib/share-app';
+import { SHARE_APP_VARIANTS, buildShareAppText, shareAppPreviewLines } from '@/lib/share-app';
 import { IconTile } from '@/components/Ui';
 import SheetModal from '@/components/SheetModal';
 
@@ -116,19 +116,19 @@ export default function ShareAppBlock({ appUrl }: { appUrl: string }) {
               ? `已复制「${lastLabel}」，可粘贴到微信`
               : lastLabel
                 ? `点开选文案 · 上次用「${lastLabel}」`
-                : '点开选一段文案，复制后发给弟兄姊妹'}
+                : '点开选一段文案，复制后发给朋友'}
           </p>
         </div>
       </button>
 
       {open && (
-        <SheetModal onClose={close} zBackdrop={85} zSheet={95} className="max-h-[82vh]">
-          <div className="px-5 pb-6">
-            <div className="pt-3 pr-10">
-              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
-              <p className="text-[15px] font-semibold">选一段分享文案</p>
-              <p className="mt-0.5 text-xs text-muted">点选后会复制到剪贴板，再去微信粘贴即可</p>
-            </div>
+        <SheetModal onClose={close} fullScreen>
+          <div className="sticky top-0 z-10 bg-card px-5 pb-2 pt-1">
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
+            <p className="text-[15px] font-semibold">选一段分享文案</p>
+            <p className="mt-0.5 text-xs text-muted">点选后会复制到剪贴板，再去微信粘贴即可</p>
+          </div>
+          <div className="px-5 pb-4">
 
             {feedback && (
               <p
@@ -149,7 +149,7 @@ export default function ShareAppBlock({ appUrl }: { appUrl: string }) {
 
             <ul className="mt-4 space-y-2.5">
               {SHARE_APP_VARIANTS.map((v) => {
-                const preview = v.build(appUrl.replace(/\/$/, '')).split('\n').slice(0, 3).join('\n');
+                const preview = shareAppPreviewLines(appUrl, v.id, 3);
                 const justCopied = copiedId === v.id;
                 const lastUsed = lastId === v.id;
                 return (
@@ -183,6 +183,14 @@ export default function ShareAppBlock({ appUrl }: { appUrl: string }) {
                 );
               })}
             </ul>
+
+            <button
+              type="button"
+              onClick={close}
+              className="mt-5 w-full rounded-xl border border-line bg-card py-3.5 text-[15px] font-bold text-brand-700 active:bg-brand-50"
+            >
+              完成
+            </button>
           </div>
         </SheetModal>
       )}
