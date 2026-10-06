@@ -157,6 +157,8 @@ export type Settings = {
   font_scale?: string;
   guide_seen?: number;
   bilingual: number;
+  /** 灵修页经文下方直接展示马唐纳注释（1 显示 / 0 隐藏，默认显示） */
+  show_verse_commentary?: number;
 };
 
 /** 经文资料页上次浏览的经卷章（独立于今日读经游标） */

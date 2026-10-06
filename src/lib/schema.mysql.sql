@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS reading_settings (
   font_scale     VARCHAR(16) NOT NULL DEFAULT 'standard',
   guide_seen     TINYINT NOT NULL DEFAULT 0,   -- 首次使用指引是否已读
   bilingual      TINYINT NOT NULL DEFAULT 1,
+  show_verse_commentary TINYINT NOT NULL DEFAULT 1,   -- 灵修页经文下方直接展示马唐纳注释
   CONSTRAINT fk_settings_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

@@ -76,6 +76,13 @@ type Note = {
 
 type FeedbackStageKey = 'observe' | 'inquire' | 'reflect' | 'guided' | 'life';
 
+/** 灵修页经文下方的马唐纳内联注释（服务端本地 txt 直读下发） */
+type InlineCommentary = {
+  enabled: boolean;
+  title: string;
+  items: { verse: number; header: string; text: string }[];
+};
+
 type Detail = {
   devotion: Devotion;
   unlockScore: number;
@@ -84,6 +91,7 @@ type Detail = {
   prompts: Prompt[];
   scores: Score[];
   coach: CoachMsg[];
+  commentary?: InlineCommentary;
   notes: Note[];
   chapterNotesReviewed?: boolean;
   gate: { ok: boolean; reason?: string };
@@ -441,6 +449,7 @@ function Passage({
   chapter,
   devotionId,
   verses,
+  commentary,
   notes,
   onNotesChange,
   chapterNotesReviewed,
@@ -453,6 +462,8 @@ function Passage({
   chapter: number;
   devotionId: number;
   verses: Verse[];
+  /** 马唐纳内联注释：enabled 时显示在对应经文下方 */
+  commentary?: InlineCommentary;
   notes?: Note[];
   chapterNotesReviewed?: boolean;
   onNotesChange: () => Promise<void>;
@@ -476,6 +487,12 @@ function Passage({
   const notesByVerse = new Map<number, Note[]>();
   for (const n of notes ?? []) {
     notesByVerse.set(n.verse, [...(notesByVerse.get(n.verse) ?? []), n]);
+  }
+
+  // 马唐纳内联注释：按挂载节索引（一个分段只挂在其覆盖范围最前的节下）
+  const commentaryByVerse = new Map<number, InlineCommentary['items'][number]>();
+  if (commentary?.enabled) {
+    for (const item of commentary.items ?? []) commentaryByVerse.set(item.verse, item);
   }
   const textNoteCount = (notes ?? []).filter((n) => n.content?.trim()).length;
 
@@ -664,6 +681,27 @@ function Passage({
                     />
                     <VerseLongPressHint />
                   </p>
+                  {commentaryByVerse.get(v.verse) && (
+                    <div
+                      className="mt-1.5 mb-1 rounded-lg border-l-2 border-brand-200 bg-brand-50/50 px-3 py-2"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => e.stopPropagation()}
+                    >
+                      <p className="text-[10px] font-bold tracking-wide text-brand-400">
+                        马唐纳注 · {commentaryByVerse.get(v.verse)!.header}
+                      </p>
+                      <div className="mt-1 space-y-1.5 text-[12.5px] leading-relaxed text-muted">
+                        {commentaryByVerse
+                          .get(v.verse)!
+                          .text.split(/\n{2,}/)
+                          .map((p) => p.trim())
+                          .filter(Boolean)
+                          .map((p) => (
+                            <p key={p.slice(0, 40)}>{p}</p>
+                          ))}
+                      </div>
+                    </div>
+                  )}
                   {verseNotes
                     .filter((n) => n.content || n.media_path)
                     .map((n) => (
@@ -803,6 +841,7 @@ function DevotionPassage({
       chapter={d.devotion.chapter}
       devotionId={d.devotion.id}
       verses={d.passage.verses}
+      commentary={d.commentary}
       notes={d.notes}
       chapterNotesReviewed={d.chapterNotesReviewed}
       onNotesChange={reload}

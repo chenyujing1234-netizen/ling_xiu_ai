@@ -120,34 +120,113 @@ export type MacdonaldVerseExcerpt = {
   verseSections: MacdonaldSection[];
 };
 
-/** 查某卷某章某节的注释；区分「卷目录缺失 / 章文件缺失 / 命中」三种情况 */
-export async function lookupMacdonaldVerse(
+/** 进程内章节缓存：一章解析一次，整页逐节注释复用；上限 24 章防膨胀 */
+const chapterCache = new Map<string, MacdonaldChapter | null>();
+const CHAPTER_CACHE_MAX = 24;
+
+export type MacdonaldChapterLookup =
+  | { status: 'no-book' }
+  | { status: 'no-chapter'; bookName: string }
+  | { status: 'ok'; chapter: MacdonaldChapter };
+
+/** 按章取整章解析结果（带进程内缓存） */
+export async function lookupMacdonaldChapter(
   bookId: number,
   chapter: number,
-  verse: number,
-): Promise<MacdonaldVerseLookup> {
+): Promise<MacdonaldChapterLookup> {
   const dir = await bookDir(bookId);
   if (!dir) return { status: 'no-book' };
   const bookName = dir.replace(/^\d+/, '');
+
+  const key = `${bookId}-${chapter}`;
+  if (chapterCache.has(key)) {
+    const hit = chapterCache.get(key);
+    return hit ? { status: 'ok', chapter: hit } : { status: 'no-chapter', bookName };
+  }
 
   const file = path.join(macdonaldCommentaryDir(), dir, `第${String(chapter).padStart(2, '0')}章.txt`);
   let raw: string;
   try {
     raw = await readFile(file, 'utf8');
   } catch {
+    chapterCache.set(key, null);
     return { status: 'no-chapter', bookName };
   }
-  if (!raw.trim()) return { status: 'no-chapter', bookName };
+  if (!raw.trim()) {
+    chapterCache.set(key, null);
+    return { status: 'no-chapter', bookName };
+  }
 
   const parsed = parseMacdonaldChapter(raw);
-  const verseSections = parsed.sections
+  if (chapterCache.size >= CHAPTER_CACHE_MAX) chapterCache.clear();
+  chapterCache.set(key, parsed);
+  return { status: 'ok', chapter: parsed };
+}
+
+/** 查某卷某章某节的注释；区分「卷目录缺失 / 章文件缺失 / 命中」三种情况 */
+export async function lookupMacdonaldVerse(
+  bookId: number,
+  chapter: number,
+  verse: number,
+): Promise<MacdonaldVerseLookup> {
+  const lookup = await lookupMacdonaldChapter(bookId, chapter);
+  if (lookup.status === 'no-book') return { status: 'no-book' };
+  if (lookup.status === 'no-chapter') return { status: 'no-chapter', bookName: lookup.bookName };
+
+  const verseSections = lookup.chapter.sections
     .filter((s) => verse >= s.from && verse <= s.to)
     .sort((a, b) => a.to - a.from - (b.to - b.from));
 
   return {
     status: 'ok',
-    excerpt: { title: parsed.title, overview: parsed.overview, verseSections },
+    excerpt: {
+      title: lookup.chapter.title,
+      overview: lookup.chapter.overview,
+      verseSections,
+    },
   };
+}
+
+export type MacdonaldInlineItem = {
+  /** 注释挂载的节：该分段覆盖范围内最靠前的节 */
+  verse: number;
+  /** 分段标记原文，如「第3-5节」 */
+  header: string;
+  text: string;
+};
+
+/**
+ * 整段经文的内联注释：每节取覆盖范围最窄的分段，一个分段只挂载一次
+ * （挂在覆盖范围内最前的节下），避免相邻节重复同一段长文。
+ * 只有逐节分段命中才返回，不含整章概述回退（内联场景重复展示概述太长）。
+ */
+export async function macdonaldInlineSections(
+  bookId: number,
+  chapter: number,
+  verseFrom: number,
+  verseTo: number,
+): Promise<{ title: string; items: MacdonaldInlineItem[] }> {
+  const lookup = await lookupMacdonaldChapter(bookId, chapter);
+  if (lookup.status !== 'ok') return { title: '', items: [] };
+
+  const sections = lookup.chapter.sections.filter((s) => s.text.trim());
+  const narrowest = new Map<number, MacdonaldSection>();
+  for (const s of sections) {
+    for (let v = Math.max(s.from, verseFrom); v <= Math.min(s.to, verseTo); v++) {
+      const cur = narrowest.get(v);
+      if (!cur || s.to - s.from < cur.to - cur.from) narrowest.set(v, s);
+    }
+  }
+
+  const items: MacdonaldInlineItem[] = [];
+  const placed = new Set<MacdonaldSection>();
+  for (const v of [...narrowest.keys()].sort((a, b) => a - b)) {
+    const s = narrowest.get(v)!;
+    if (placed.has(s)) continue;
+    placed.add(s);
+    items.push({ verse: v, header: s.header, text: s.text.trim() });
+  }
+  return { title: lookup.chapter.title, items };
 }
 
 export type MacdonaldCommentaryResult = {

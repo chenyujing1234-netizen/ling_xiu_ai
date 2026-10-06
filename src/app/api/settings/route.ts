@@ -11,6 +11,7 @@ const Schema = z.object({
   cursorBook: z.number().int().min(1).max(66).optional(),
   cursorChapter: z.number().int().min(1).max(150).optional(),
   bilingual: z.boolean().optional(),
+  showVerseCommentary: z.boolean().optional(),
   theme: z.enum(THEME_IDS).optional(),
   fontScale: z.enum(FONT_SCALE_IDS).optional(),
 });
@@ -31,7 +32,8 @@ export async function POST(req: Request) {
     await db()
       .prepare(
         `UPDATE reading_settings
-         SET daily_chapters = ?, cursor_book = ?, cursor_chapter = ?, bilingual = ?, theme = ?, font_scale = ?
+         SET daily_chapters = ?, cursor_book = ?, cursor_chapter = ?, bilingual = ?,
+             show_verse_commentary = ?, theme = ?, font_scale = ?
          WHERE user_id = ?`,
       )
       .run(
@@ -39,6 +41,11 @@ export async function POST(req: Request) {
         d.cursorBook ?? current.cursor_book,
         d.cursorChapter ?? current.cursor_chapter,
         d.bilingual === undefined ? current.bilingual : d.bilingual ? 1 : 0,
+        d.showVerseCommentary === undefined
+          ? current.show_verse_commentary ?? 1
+          : d.showVerseCommentary
+            ? 1
+            : 0,
         d.theme ? normalizeTheme(d.theme) : normalizeTheme(current.theme),
         d.fontScale ? normalizeFontScale(d.fontScale) : normalizeFontScale(current.font_scale),
         session.uid,

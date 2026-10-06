@@ -73,7 +73,8 @@ CREATE TABLE IF NOT EXISTS reading_settings (
   theme          TEXT NOT NULL DEFAULT 'classic',
   font_scale     TEXT NOT NULL DEFAULT 'standard',
   guide_seen     INTEGER NOT NULL DEFAULT 0,
-  bilingual      INTEGER NOT NULL DEFAULT 1
+  bilingual      INTEGER NOT NULL DEFAULT 1,
+  show_verse_commentary INTEGER NOT NULL DEFAULT 1  -- 灵修页经文下方直接展示马唐纳注释
 );
 
 -- 每天一条：记录读了哪些章，以及是否达成"真正读过"的判定（R-D6）

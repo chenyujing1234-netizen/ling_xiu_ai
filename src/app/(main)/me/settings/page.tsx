@@ -4,6 +4,7 @@ import SettingsForm from '@/components/SettingsForm';
 import FontScalePicker from '@/components/FontScalePicker';
 import ThemePicker from '@/components/ThemePicker';
 import ImageStyleSettings from '@/components/ImageStyleSettings';
+import VerseCommentaryToggle from '@/components/VerseCommentaryToggle';
 import { normalizeFontScale } from '@/lib/font-scale';
 import { normalizeTheme } from '@/lib/themes';
 
@@ -21,6 +22,7 @@ export default async function SettingsPage() {
       <div className="space-y-5">
       <FontScalePicker initial={normalizeFontScale(settings.font_scale)} />
       <ThemePicker initial={normalizeTheme(settings.theme)} />
+      <VerseCommentaryToggle initial={(settings.show_verse_commentary ?? 1) === 1} />
       <ImageStyleSettings />
       <SettingsForm
         books={books}

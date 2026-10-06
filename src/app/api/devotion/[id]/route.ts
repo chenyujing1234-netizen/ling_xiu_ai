@@ -15,6 +15,8 @@ import {
 } from '@/lib/devotion';
 import { resolveRange } from '@/lib/insights';
 import { db } from '@/lib/db';
+import { getSettings } from '@/lib/bible';
+import { macdonaldInlineSections } from '@/lib/macdonald-commentary';
 import { chapterNotesReviewStatus } from '@/lib/chapter-notes-review';
 import { attachNoteReviewFlags } from '@/lib/note-review';
 import {
@@ -70,6 +72,12 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       }),
     );
 
+    // 灵修页经文下方的马唐纳注释：读用户开关 + 本地按章 txt 整章直读
+    const [settings, inline] = await Promise.all([
+      getSettings(session.uid),
+      macdonaldInlineSections(d.book_id, d.chapter, r.from, r.to),
+    ]);
+
     await persistMergedTextNotesPerVerse(conn, session.uid, d.book_id, d.chapter);
     const freshNotes = await conn
       .prepare(
@@ -106,6 +114,11 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       prompts,
       scores,
       coach: coachOut,
+      commentary: {
+        enabled: (settings.show_verse_commentary ?? 1) === 1,
+        title: inline.title,
+        items: inline.items,
+      },
       notes: notesMerged,
       chapterNotesReviewed,
       gate,
