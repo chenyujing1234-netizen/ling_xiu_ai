@@ -66,6 +66,19 @@ export function parseJobResult(label: string, data: unknown): JobResultView | nu
     };
   }
 
+  if (nested && typeof nested === 'object' && typeof (nested as { body?: unknown }).body === 'string') {
+    const cm = nested as { body: string; note?: string };
+    const parts = [cm.body?.trim(), cm.note?.trim()].filter(Boolean);
+    if (parts.length) {
+      return {
+        kind: 'text',
+        title: label,
+        body: parts.join('\n\n'),
+        ragSources: (d.ragSources as RagSource[] | undefined) ?? undefined,
+      };
+    }
+  }
+
   if (nested && typeof nested === 'object' && typeof (nested as { era?: unknown }).era === 'string') {
     const bg = nested as {
       era: string;

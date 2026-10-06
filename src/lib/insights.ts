@@ -13,6 +13,7 @@ import { getBook, getRange, passageText, refKey, refLabel, contextWindow, getVer
 import { saveSceneImage } from './media';
 import { parseRagSources, serializeRagSources, type RagSource } from './rag-sources';
 import { knowledgeForLlm, knowledgeForVerseBackground } from './knowledge-context';
+import { macdonaldVerseCommentary } from './macdonald-commentary';
 import { imageInsightCacheKind, normalizeImageStyle } from './image-styles';
 
 // ---------- 类型 ----------
@@ -44,6 +45,12 @@ export type VerseBackground = {
   custom: string;
   parallel: string;
   for_verse: string;
+};
+
+/** 单节注释（马唐纳，本地文本直读） */
+export type VerseCommentary = {
+  body: string;
+  note?: string;
 };
 
 export type GraphData = {
@@ -249,6 +256,31 @@ export async function getContextInsight(
         { model: MODELS.fast(), maxTokens: 9000 },
       );
       return { data, ragSources: knowledgeCtx.ragSources };
+    },
+    force,
+  );
+}
+
+/** 单节注释（马唐纳）：本地按章 txt 直读，原文呈现，不经过 LLM */
+export async function getVerseCommentary(
+  bookId: number,
+  chapter: number,
+  verse: number,
+  force = false,
+): Promise<InsightResult<VerseCommentary>> {
+  const key = contextKey(bookId, chapter, verse);
+
+  return cached<VerseCommentary>(
+    key,
+    'commentary_macdonald',
+    async () => {
+      const mc = await macdonaldVerseCommentary(bookId, chapter, verse);
+      return {
+        data: { body: mc.body, note: mc.note },
+        ragSources: mc.found
+          ? [{ id: 'local:macdonald', name: '《马唐纳注释》本地文本' }]
+          : [],
+      };
     },
     force,
   );

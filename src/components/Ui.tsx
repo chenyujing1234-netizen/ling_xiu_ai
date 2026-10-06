@@ -195,6 +195,33 @@ export function NoteReviewedBadge({ className }: { className?: string }) {
   );
 }
 
+/** 经节旁：查看注释（马唐纳） */
+export function VerseCommentaryButton({
+  onClick,
+  disabled,
+  className,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={`ml-1 inline-flex shrink-0 align-middle items-center rounded-md border border-line bg-surface/90 px-1.5 py-0.5 text-[10px] font-bold leading-none text-muted hover:text-brand-700 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40 ${className ?? ''}`}
+      aria-label="查看本节圣经注释"
+    >
+      注释
+    </button>
+  );
+}
+
 /** 经节旁：查看本节圣经背景 */
 export function VerseBackgroundButton({
   onClick,

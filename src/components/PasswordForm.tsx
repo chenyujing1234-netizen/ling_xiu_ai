@@ -27,7 +27,7 @@ export default function PasswordForm() {
         json: first ? { next } : { current, next },
       });
       setDone(true);
-      setTimeout(() => hardNavigate('/'), 900);
+      setTimeout(() => hardNavigate(first ? '/devotion' : '/'), 900);
     } catch (err) {
       setError((err as Error).message);
     } finally {

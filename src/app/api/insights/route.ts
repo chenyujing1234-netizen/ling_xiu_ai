@@ -4,6 +4,7 @@ import {
   getElements,
   getContextInsight,
   getVerseBackground,
+  getVerseCommentary,
   getGraph,
   getMindmap,
   getSceneImage,
@@ -55,6 +56,20 @@ export async function GET(req: Request) {
         force || backgroundRefresh,
       );
       return { kind, data: bg.data, ragSources: bg.ragSources };
+    }
+
+    if (kind === 'commentary') {
+      const verse = intParam(req, 'verse');
+      const commentaryRefresh = url.searchParams.get('refresh') === '1';
+      const cacheKind = 'commentary_macdonald';
+      if (cacheOnly) {
+        const hit = await readCachedInsight(bookId, chapter, cacheKind, { verse });
+        return hit
+          ? { kind, data: hit.data, ragSources: hit.ragSources }
+          : { kind, data: null };
+      }
+      const cm = await getVerseCommentary(bookId, chapter, verse, force || commentaryRefresh);
+      return { kind, data: cm.data, ragSources: cm.ragSources };
     }
 
     const from = intParam(req, 'from', 1);

@@ -5,6 +5,7 @@ import { allBooks, explorePosition, getSettings, refLabel } from '@/lib/bible';
 import { db } from '@/lib/db';
 import { STAGE_META, type Stage } from '@/lib/devotion';
 import DevotionHome, { type HomeTab } from '@/components/DevotionHome';
+import DevotionListGuide from '@/components/DevotionListGuide';
 import PageBanner from '@/components/PageBanner';
 import ExploreView from '@/components/ExploreView';
 import { IconCheck, IconFlame, IconPlay, SectionTitle } from '@/components/Ui';
@@ -62,7 +63,11 @@ export default async function DevotionListPage({
   const book = Number(sp.book) || savedExplore.book;
   const chapter = Number(sp.chapter) || savedExplore.chapter;
 
+  const unlockScore = Number(process.env.DEVOTION_UNLOCK_SCORE || 40);
+  const showTour = !settings.guide_seen;
+
   return (
+    <DevotionListGuide showTour={showTour} unlockScore={unlockScore}>
     <DevotionHome initialTab={tab} explore={<ExploreView books={books} initialBook={book} initialChapter={chapter} />}>
       <div className="px-4 py-5">
       <PageBanner variant="devotion" />
@@ -75,6 +80,7 @@ export default async function DevotionListPage({
       </header>
 
       <Link
+        id="lx-tour-devotion-start"
         href={`/devotion/start?book=${settings.cursor_book}&chapter=${settings.cursor_chapter}`}
         className="btn-primary w-full gap-2 py-3"
       >
@@ -137,5 +143,6 @@ export default async function DevotionListPage({
       </section>
       </div>
     </DevotionHome>
+    </DevotionListGuide>
   );
 }

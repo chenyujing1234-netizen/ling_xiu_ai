@@ -34,8 +34,10 @@ export default function DevotionHome({
     window.history.replaceState(null, '', url.toString());
   }, [tab]);
 
-  const item = (key: HomeTab, label: string, icon: ReactNode) => (
+  const item = (key: HomeTab, label: string, icon: ReactNode, tourId?: string) => (
     <button
+      id={tourId}
+      type="button"
       onClick={() => setTab(key)}
       aria-current={tab === key ? 'page' : undefined}
       className={`-mb-px flex flex-1 items-center justify-center gap-1.5 border-b-2 px-2 py-3 text-sm transition ${
@@ -50,8 +52,8 @@ export default function DevotionHome({
   return (
     <div>
       <div className="sticky top-0 z-40 flex h-11 items-stretch border-b border-line bg-paper/95 px-1 backdrop-blur">
-        {item('devotion', devotionLabel, <IconFlame size={17} />)}
-        {item('explore', '经文资料', <IconBook size={17} />)}
+        {item('devotion', devotionLabel, <IconFlame size={17} />, 'lx-tour-tab-devotion')}
+        {item('explore', '经文资料', <IconBook size={17} />, 'lx-tour-tab-explore')}
       </div>
 
       <div className={tab === 'devotion' ? undefined : 'hidden'} aria-hidden={tab !== 'devotion'}>

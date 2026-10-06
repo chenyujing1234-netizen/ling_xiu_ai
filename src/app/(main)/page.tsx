@@ -29,6 +29,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   const forceToday = sp.home === '1';
   if (!forceToday) {
+    const boot = await getSettings(uid);
+    if (!boot.guide_seen) redirect('/devotion');
     const resume = await getResumePath(uid);
     if (resume && resume !== '/') redirect(resume);
   }

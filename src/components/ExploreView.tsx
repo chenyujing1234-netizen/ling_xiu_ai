@@ -85,7 +85,10 @@ export default function ExploreView({
   return (
     <div>
       {/* top-11 让位给灵修页那层页签（h-11），否则两层吸顶会叠在一起 */}
-      <header className="sticky top-11 z-30 border-b border-line bg-paper/95 px-4 py-3 backdrop-blur">
+      <header
+        id="lx-tour-explore-header"
+        className="sticky top-11 z-30 border-b border-line bg-paper/95 px-4 py-3 backdrop-blur"
+      >
         <h1 className="text-[17px] font-semibold">经文资料 · {label}</h1>
         <div className="mt-2 flex gap-2">
           <select

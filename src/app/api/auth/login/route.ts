@@ -41,8 +41,13 @@ export async function POST(req: Request) {
 
     await recordAttempt(phone, true);
     const row = await db()
-      .prepare(`SELECT last_path FROM users WHERE id = ?`)
-      .get<{ last_path: string | null }>(user!.id);
+      .prepare(
+        `SELECT u.last_path, COALESCE(rs.guide_seen, 0) AS guide_seen
+         FROM users u
+         LEFT JOIN reading_settings rs ON rs.user_id = u.id
+         WHERE u.id = ?`,
+      )
+      .get<{ last_path: string | null; guide_seen: number }>(user!.id);
     await db().prepare(`UPDATE users SET last_login_at = NOW() WHERE id = ?`).run(user!.id);
 
     await setSessionCookie({
@@ -52,7 +57,10 @@ export async function POST(req: Request) {
       mustChangePw: Boolean(user!.must_change_pw),
     });
 
-    const lastPath = sanitizeLastPath(row?.last_path) ?? null;
+    const firstGuide = !row?.guide_seen;
+    const lastPath = firstGuide
+      ? '/devotion'
+      : sanitizeLastPath(row?.last_path) ?? null;
     await setResumeCookie(lastPath);
 
     return {

@@ -24,3 +24,6 @@ backup/
 
 .DS_Store
 *.log
+
+# 马唐纳注释原始数据的冗余打包，不入库（txt 目录才入库）
+book/*.zip

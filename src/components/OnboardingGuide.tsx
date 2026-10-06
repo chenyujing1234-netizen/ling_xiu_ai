@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { STAGES, STAGE_META } from '@/lib/devotion-stages';
 import { api } from '@/lib/client';
+import { useBindOverlayHistory } from '@/lib/overlay-history';
 import { IconFlame, SheetCloseButton } from '@/components/Ui';
 
 const DEVOTION_STAGES = STAGES.filter((s) => s !== 'done');
@@ -33,6 +34,10 @@ export default function OnboardingGuide({
       /* 下次进来再提示也行 */
     }
   }, []);
+
+  useBindOverlayHistory(open, () => {
+    void dismiss();
+  });
 
   if (!open) return null;
 

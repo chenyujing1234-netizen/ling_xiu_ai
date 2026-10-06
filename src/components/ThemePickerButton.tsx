@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import { IconPalette, SheetCloseButton } from '@/components/Ui';
+import { useBindOverlayHistory } from '@/lib/overlay-history';
 import ThemePicker from './ThemePicker';
 
 /** 首页右上角：点开底部面板选风格 */
 export default function ThemePickerButton({ initial }: { initial: string }) {
   const [open, setOpen] = useState(false);
+  useBindOverlayHistory(open, () => setOpen(false));
 
   return (
     <>

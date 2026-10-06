@@ -13,6 +13,7 @@ import {
   IconScripture,
   NoteReviewedBadge,
   VerseBackgroundButton,
+  VerseCommentaryButton,
   VerseImageButton,
   VerseLongPressHint,
 } from '@/components/Ui';
@@ -21,6 +22,7 @@ import Dictate from './Dictate';
 import NoteSheet, { type NoteEdit, type VerseTarget } from './NoteSheet';
 import VerseImageSheet from './VerseImageSheet';
 import VerseBackgroundSheet from './VerseBackgroundSheet';
+import VerseCommentarySheet from './VerseCommentarySheet';
 import PageBackButton from './PageBackButton';
 import SheetModal from './SheetModal';
 import ChapterNotesReviewBlock from './ChapterNotesReviewBlock';
@@ -464,6 +466,7 @@ function Passage({
   const [target, setTarget] = useState<VerseTarget | null>(null);
   const [imageTarget, setImageTarget] = useState<VerseTarget | null>(null);
   const [backgroundTarget, setBackgroundTarget] = useState<VerseTarget | null>(null);
+  const [commentaryTarget, setCommentaryTarget] = useState<VerseTarget | null>(null);
   const [editing, setEditing] = useState<NoteEdit | null>(null);
   const [pressing, setPressing] = useState<number | null>(null);
 
@@ -635,6 +638,18 @@ function Passage({
                         })
                       }
                     />
+                    <VerseCommentaryButton
+                      onClick={() =>
+                        setCommentaryTarget({
+                          bookId,
+                          bookName,
+                          chapter,
+                          verse: v.verse,
+                          cn: v.cn,
+                          en: v.en ?? '',
+                        })
+                      }
+                    />
                     <VerseImageButton
                       onClick={() =>
                         setImageTarget({
@@ -726,6 +741,13 @@ function Passage({
           target={backgroundTarget}
           onClose={() => setBackgroundTarget(null)}
           onReopen={(t) => setBackgroundTarget(t)}
+        />
+      )}
+
+      {commentaryTarget && (
+        <VerseCommentarySheet
+          target={commentaryTarget}
+          onClose={() => setCommentaryTarget(null)}
         />
       )}
     </section>

@@ -23,7 +23,9 @@ export default function LoginForm() {
       const next = params.get('next');
       const dest = res.mustChangePw
         ? '/me/password?first=1'
-        : sanitizeLastPath(next) || res.lastPath || '/';
+        : res.lastPath === '/devotion'
+          ? '/devotion'
+          : sanitizeLastPath(next) || res.lastPath || '/';
       hardNavigate(dest);
     } catch (err) {
       setError((err as Error).message);
