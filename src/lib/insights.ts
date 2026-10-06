@@ -13,7 +13,11 @@ import { getBook, getRange, passageText, refKey, refLabel, contextWindow, getVer
 import { saveSceneImage } from './media';
 import { parseRagSources, serializeRagSources, type RagSource } from './rag-sources';
 import { knowledgeForLlm, knowledgeForVerseBackground } from './knowledge-context';
-import { macdonaldVerseCommentary } from './macdonald-commentary';
+import {
+  LOCAL_COMMENTARY_SOURCES,
+  LOCAL_COMMENTARY_ORDER,
+  localVerseCommentary,
+} from './local-commentary';
 import { imageInsightCacheKind, normalizeImageStyle } from './image-styles';
 
 // ---------- 类型 ----------
@@ -47,10 +51,20 @@ export type VerseBackground = {
   for_verse: string;
 };
 
-/** 单节注释（马唐纳，本地文本直读） */
-export type VerseCommentary = {
+/** 单节注释的单一来源（马唐纳 / 丁道尔，本地文本直读） */
+export type VerseCommentarySection = {
+  /** 来源 id：macdonald | tyndale */
+  source: string;
+  /** 呈现名：马唐纳 | 丁道尔 */
+  label: string;
+  found: boolean;
   body: string;
   note?: string;
+};
+
+/** 单节注释：按固定顺序聚合各本地来源 */
+export type VerseCommentary = {
+  sections: VerseCommentarySection[];
 };
 
 export type GraphData = {
@@ -261,7 +275,7 @@ export async function getContextInsight(
   );
 }
 
-/** 单节注释（马唐纳）：本地按章 txt 直读，原文呈现，不经过 LLM */
+/** 单节注释（马唐纳 + 丁道尔）：本地按章 txt 直读，原文呈现，不经过 LLM */
 export async function getVerseCommentary(
   bookId: number,
   chapter: number,
@@ -272,15 +286,17 @@ export async function getVerseCommentary(
 
   return cached<VerseCommentary>(
     key,
-    'commentary_macdonald',
+    'commentary_local',
     async () => {
-      const mc = await macdonaldVerseCommentary(bookId, chapter, verse);
-      return {
-        data: { body: mc.body, note: mc.note },
-        ragSources: mc.found
-          ? [{ id: 'local:macdonald', name: '《马唐纳注释》本地文本' }]
-          : [],
-      };
+      const sections: VerseCommentarySection[] = [];
+      const ragSources: RagSource[] = [];
+      for (const id of LOCAL_COMMENTARY_ORDER) {
+        const src = LOCAL_COMMENTARY_SOURCES[id];
+        const r = await localVerseCommentary(src, bookId, chapter, verse);
+        sections.push({ source: id, label: src.label, found: r.found, body: r.body, note: r.note });
+        if (r.found) ragSources.push({ id: `local:${id}`, name: `《${src.label}注释》本地文本` });
+      }
+      return { data: { sections }, ragSources };
     },
     force,
   );

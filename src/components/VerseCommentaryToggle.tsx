@@ -28,7 +28,7 @@ export default function VerseCommentaryToggle({ initial }: { initial: boolean })
     <section className="card px-4 py-4">
       <p className="label mb-1">经文注释展示</p>
       <p className="mb-3 text-xs font-medium text-muted">
-        灵修页每节经文下方直接展示《马唐纳注释》原文（本地文本，非 AI 生成）
+        灵修页每节经文下方直接展示《马唐纳注释》《丁道尔圣经注释》原文（本地文本，非 AI 生成）
       </p>
       <div className="flex gap-2">
         <button

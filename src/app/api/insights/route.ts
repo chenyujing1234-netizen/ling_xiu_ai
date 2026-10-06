@@ -61,7 +61,7 @@ export async function GET(req: Request) {
     if (kind === 'commentary') {
       const verse = intParam(req, 'verse');
       const commentaryRefresh = url.searchParams.get('refresh') === '1';
-      const cacheKind = 'commentary_macdonald';
+      const cacheKind = 'commentary_local';
       if (cacheOnly) {
         const hit = await readCachedInsight(bookId, chapter, cacheKind, { verse });
         return hit

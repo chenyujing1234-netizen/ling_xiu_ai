@@ -16,7 +16,11 @@ import {
 import { resolveRange } from '@/lib/insights';
 import { db } from '@/lib/db';
 import { getSettings } from '@/lib/bible';
-import { macdonaldInlineSections } from '@/lib/macdonald-commentary';
+import {
+  LOCAL_COMMENTARY_SOURCES,
+  LOCAL_COMMENTARY_ORDER,
+  localInlineSections,
+} from '@/lib/local-commentary';
 import { chapterNotesReviewStatus } from '@/lib/chapter-notes-review';
 import { attachNoteReviewFlags } from '@/lib/note-review';
 import {
@@ -72,10 +76,12 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       }),
     );
 
-    // 灵修页经文下方的马唐纳注释：读用户开关 + 本地按章 txt 整章直读
-    const [settings, inline] = await Promise.all([
+    // 灵修页经文下方的本地注释（马唐纳 + 丁道尔）：读用户开关 + 各来源整章直读
+    const [settings, ...inlineList] = await Promise.all([
       getSettings(session.uid),
-      macdonaldInlineSections(d.book_id, d.chapter, r.from, r.to),
+      ...LOCAL_COMMENTARY_ORDER.map((id) =>
+        localInlineSections(LOCAL_COMMENTARY_SOURCES[id], d.book_id, d.chapter, r.from, r.to),
+      ),
     ]);
 
     await persistMergedTextNotesPerVerse(conn, session.uid, d.book_id, d.chapter);
@@ -116,8 +122,12 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       coach: coachOut,
       commentary: {
         enabled: (settings.show_verse_commentary ?? 1) === 1,
-        title: inline.title,
-        items: inline.items,
+        sources: LOCAL_COMMENTARY_ORDER.map((id, i) => ({
+          id,
+          label: LOCAL_COMMENTARY_SOURCES[id].label,
+          title: inlineList[i]!.title,
+          items: inlineList[i]!.items,
+        })),
       },
       notes: notesMerged,
       chapterNotesReviewed,

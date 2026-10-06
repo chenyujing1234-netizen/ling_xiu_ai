@@ -1,0 +1,345 @@
+《丁道尔圣经注释·那鸿书》绪论
+来源: chajing.fuyin.tv/34DT00.htm
+
+
+【本章概述】
+那鸿书导论
+编者序
+这一系列丁道尔旧约圣经注释丛书的目的，与新约注释系列一样，都在提供研经者最精简、资料最新的注释，最主要的重点在于解释经文原意。大部分批判的问题都在导论与随文的增注中讨论，但尽量避免过度专业化。
+在这一系列丛书中，每位作者当然都有自由可以提出他们自己不同的贡献，就所有争论点表达他们自己的观点。在必要的篇幅限制内，一些经常引起我们注意的解释，虽然不是他们自己的看法，但却代表热忱之基督徒同伴们所陈述的结论。
+那鸿、哈巴谷和西番雅这三卷书，涵盖了以色列历史中，一段波涛汹涌的重要时代。在这时代，先知发出警告∶以色列人若拒绝从背道回转归向神，并且实行社会公平，审判就必快临。这警告终于应验于主前五八七年，耶路撒冷陷落，以色列被掳到巴比伦。
+没有一本（中）英文译本能充分反映圣经（尤其是旧约）的原文。这三本书的注释是根据新国际本（New International Version，中文则是根据和合本）；但也经常参考其他中英文译本，有时作者也加上自己的翻译。必要时会将一些字词音译，以帮助不熟悉希伯来文的读者，正确地掌握所讨论之字词的意义。
+在研读过程中，读者应该准备一本或多本可靠的中英文译本圣经，以作随时参考。
+信徒对旧约圣经之意义与信息的兴趣，迄今仍未稍减；盼望本系列丛书能帮助人有系统地研读神的启示，在这些书卷中看见神的旨意与道路。但愿这套书能帮助许多人在今日了解并回应神的话语，这是编者、出版者与作者的祷告。
+魏兹曼
+（D. J.
+Wiseman）
+作者序
+向西横越美洲大平原时，远方的洛矶山脉（Rocky
+Mountains）看来相当渺小，微不足道。然而，人一旦进入这个山脉中，环顾四围，到处都可见到神创造这些杰作的能力和美丽。我们研究“小”先知书时，也经历到同样的惊异与威严。它们之所以“小”，只不过是在篇幅上，但在文学素质与神学适切性上，它们通常都是“大”的。人仅能期望欣赏高山风采于万一；照样，人也必体会到∶先知潜存的丰富仍待汲取。我们研读那鸿书、哈巴谷书与西番雅书，盼望至少能触摸到其中最有意义、最令人赞叹的一面。
+为着这趟旅行所获得的益处，我要感谢魏兹曼教授。他主动让我参与这趟旅程，并且沿途详加指引。我也感谢国际学生团契出版社（Inter-Varsity Press）及其同工耐心的编辑。我要向莫雯（Morven）献上最深的感谢与爱，感谢她不断支持和鼓励；她丝毫没有察觉，当她这么做时，她正重复着路得的誓言──无论神预备了什么道路，她都要伴随拿俄米前往。
+贝克
+（David W.
+Baker）
+简写一览
+
+Ⅰ 圣经版本
+
+【本章概述】
+AV Authorized
+Version (King James), 1611.
+BHS A.
+Alt et al. (eds.), Biblica Hebraia Stuttgartensia (Deutsche
+Bibelstiftung Stuttgart,
+1967∕77).
+DSS Dead Sea Scrolls. 死海古卷
+JB Jerusalem
+Bible, 1966. 耶路撒冷圣经
+LXX The
+Septuagint. 七十士译本
+MT Masoretic
+Text. 马索拉经文
+NEB New
+English Bible, 1970. 新英文圣经
+NIV New
+International Version, 1973, 1978, 1984. 新国际本圣经
+NJB New
+Jerusalem Bible, 1985.
+RSV Revised
+Standard Version, 1952. 标准修订本圣经
+Syr. Syriac.
+Vulg. Vulgate.
+武加大译本
+和合本 新旧约全书（香港圣经公会）
+吕译 圣经（吕振中译，香港圣经公会）
+思高 圣经（思高圣经学会译释）
+现中 圣经──现代中文译本（香港圣经公会，1980）
+今圣 圣经──中文意译本新旧约全书（意译本圣经会，1980）
+
+Ⅱ 其他参考资料
+
+【本章概述】
+ANET J.
+B. Pritchard, Ancient Near Eastern Texts Relating to the Old Testament (Princeton University Press, 21955; 31969).
+BDB F.
+Brown, S. R. Driver and C. A. Briggs, Hebrew and English Lexicon of the Old
+Testament (Clarendon Press, 1906).
+G-K Gesenius-Kautzsch,
+Hebrew Grammar, ET, 1910.
+IBD J.
+D. Douglas et al. (eds.), The Illustrated Bible Dictionary, 3
+vols. (IVP, 1980).
+IDBS K.
+Crim et al. (eds.), The Interpreter's Dictionary of the Bible,
+Supplementary volume (Abingdon Press, 1976).
+NBD J.
+D. Douglas et al. (eds.), The New Bible Dictionary (IVP, 21982).《圣经新辞典》，天道，1993。
+POTT D.
+J. Wiseman (ed.), Peoples of Old Testament Times (Oxford University
+Press, 1973).
+
+Ⅲ 期刊
+
+【本章概述】
+CBQ Catholic
+Biblical Quarterly.
+JBL Journal
+of Biblical Literature.
+JNES Journal
+of Near Eastern Studies.
+JR Journal
+of Religion.
+OTS Oudtestamentlische
+Studien.
+VT Vetus
+Testamentum.
+ZAW Zeitschrift fu/r die alttestamentliche
+Wissenschaft.
+精选书目
+
+Ⅰ 那鸿书
+
+【本章概述】
+Cathcart K.
+J. Cathcart, Nahum in the Light of Northwest Semitic (Pontifical
+Biblical Institute, 1973).
+Coggins R.
+J. Coggins, ' "In Wrath Remember Mercy"－A Commentary on the Book of Nahum' in R.
+J. Coggins and S. P. Re~emi, Israel Among the Nations,
+International Theological Commentary (Eerdmans ∕ Handsel Press, 1985).
+Craigie P.
+C. Craigie, Twelve Prophets 1, Daily Study Bible (Westminster ∕ St Andrew
+Press, 1984).
+克莱基着，《小先知书注释》上册，每日研经丛书，基督教文艺出版社，1994年。
+Eaton J.
+H. Eaton, Obadiah, Nahum, Habakkuk and Zephaniah, Torch Bible
+Commentaries (SCM Press, 1961).
+Keil C.
+F. Keil, 'Nahum' in The Twelve Minor Prophets 2, trans. J. Martin
+(Eerdmans, 1949).
+Laetsch T.
+F. C. Laetsch, Bible Commentary: The Minor Prophets (Concordia, 1956).
+Maier W.
+A. Maier, The Book of Nahum (Concordia, 1959).
+Rudolph W.
+Rudolph, Micha－Nahum－Habakuk－Zephanja, Kommentar zum Alten Testament (GVGM, 1975).
+G. A.
+Smith G.
+A. Smith, The Book of the Twelve Prophets, The Expositor's Bible (A. C.
+Armstrong, 21901).
+J. M. P.
+Smith J.
+M. P. Smith, 'Nahum' in J. M. P. Smith, W. H. Ward and J. A. Bewer, A
+Critical and Exegetical Commentary on Micah, Zephaniah, Nahum, Habakkuk, Obadiah
+and Joel, International Critical Commentary (T. & T. Clark ∕
+Scribners, 1911).
+R. L.
+Smith R.
+L. Smith, Micah-Malachi, Word Biblical Commentary (Word Books, 1984).
+Watts J.
+D. W. Watts, The Books of Joel, Obadiah, Jonah, Nahum, Habakkuk and
+Zephaniah, Cambridge
+Bible Commentary (Cambridge University Press, 1975).
+
+Ⅱ 哈巴谷书
+
+【本章概述】
+Armerding C.
+E. Armerding, Habakkuk in F. E. Gaebelein (ed.), The Expositor's
+Bible Commentary 7 (Zondervan, 1985).
+Brownlee W.
+H. Brownlee, The Midrash Pesher of Habakkuk (Scholars Press, 1979).
+Craigie P.
+C. Craigie, Twelve Prophets 2, Daily Study Bible (Westminster ∕ St Andrew
+Press, 1985).
+克莱基着，《小先知书注释》下册，每日研经丛书，基督教文艺出版社，1994年。
+Eaton J.
+H. Eaton, Obadiah, Nahum, Habakkuk and Zephaniah, Torch Bible
+Commentaries (SCM Press, 1961).
+Gowan D.
+E. Gowan, The Triumph of Faith in Habakkuk (John Knox Press, 1976).
+Jo/cken P.
+Jo/cken, Das Buch Habakuk: Darstellung der Geschichte seiner kritischen
+Erforschung mit einer eigenen Beurteilung (Peter Hanstein, 1977).
+Keil C.
+F. Keil, 'Habakkuk' in The Twelve Minor Prophets 2, trans. J. Martin
+(Eerdmans, 1949).
+Laetsch T.
+F. C. Laetsch, Bible Commentary: The Minor Prophets (Concordia, 1956).
+Lloyd-Jones D.
+M. Lloyd-Jones, From Fear to Faith (IVF, 1953; republished in Faith
+Tried and Triumphant, IVP, 1987).
+钟马田着，《从恐惧到信靠》，校园，1975年。
+Rudolph W.
+Rudolph, Micha－Nahum－Habakkuk－Zephanja (GVGM, 1975).
+G. A.
+Smith G.
+A. Smith, The Book of the Twelve Prophets, The Expositor's Bible (A. C.
+Armstrong ∕ Hodder & Stoughton, 1898).
+R. L.
+Smith R.
+L. Smith, Micah-Malachi, Word Biblical Commentary (Word Books, 1984).
+Ward W.
+H. Ward, 'Habakkuk' in J. M. P. Smith, W. H. Ward and J. A. Bewer, A
+Critical and Exegetical Commentary on Micah, Zephaniah, Nahum, Habakkuk,
+Obadiah and Joel, International Critical Commentary (T. & T. Clark ∕
+Scribners, 1911).
+Watts J.
+D. W. Watts, The Books of Joel, Obadiah, Jonah, Nahum, Habakkuk and
+Zephaniah, Cambridge
+Bible Commentary (Cambridge University Press, 1975).
+
+Ⅲ 西番雅书
+
+【本章概述】
+Achtemeier E. Achtemeier, Nahum-Malachi (John Knox Press,
+1986).
+Craigie P.
+C. Craigie, Twelve Prophets 2, Daily Study Bible (Westminster ∕ St Andrew
+Press, 1985).
+克莱基着，《小先知书注释》下册，每日研经丛书，基督教文艺出版社，1994年。
+Eaton J.
+H. Eaton, Obadiah, Nahum, Habakkuk and Zephaniah, Torch Bible
+Commentaries (SCM Press, 1961).
+Irsigler H.
+Irsigler, Gottesgericht und Jahwetag: Die Komposition Zef 1, 1-2, 3,
+untersucht auf der Grundlage der Literarkritik des Zefanjabuch (EOS-Verlag,
+1977).
+Kapelrud A.
+S. Kapelrud, The Message of the Prophet Zephaniah (Universitetsforlaget,
+1975).
+Keil C.
+F. Keil, 'Zephaniah' in The Twelve Minor Prophets 2, trans. J. Martin
+(Eerdmans, 1949).
+Laetsch T.
+F. C. Laetsch, Bible Commentary: The Minor Prophets (Concordia, 1956).
+Rudolph W.
+Rudolph, Micha－Nahum－Habakkuk－\cs16Zephanja (GVGM,
+1975).
+Sabottka L.
+Sabottka, Zephanja (Pontifical Biblical Institute, 1972).
+G. A.
+Smith G.
+A. Smith, The Book of the Twelve Prophets, The Expositor's Bible
+(Doubleday, 1929).
+J. M. P.
+Smith J.
+M. P. Smith, 'Zephaniah' in J. M. P. Smith, W. H. Ward and J. A. Bewer, A
+Critical and Exegetical Commentary on Micah, Zephaniah, Nahum, Habakkuk,
+Obadiah and Joel, International Critical Commentary (T. & T. Clark ∕
+Scribners, 1911).
+R. L.
+Smith R.
+L. Smith, Micah-Malachi, Word Biblical Commentary (Word Books, 1984).
+Watts J.
+D. W. Watts, The Books of Joel, Obadiah, Jonah, Nahum, Habakkuk and
+Zephaniah, Cambridge
+Bible Commentary (Cambridge University Press, 1975).
+那鸿书导论
+
+Ⅰ 先知那鸿
+
+【本章概述】
+“那鸿”这名字最可能的意义是“安慰”或“安心”；它只出现在本书的头一节以及路加福音三25（中译“拿鸿”，耶稣祖先之一，但两处所指的是不同之人）。它较常出现在圣经外作品中；而在圣经中，它的同根字“尼希米”倒颇常见。关于先知那鸿，除了他是伊勒歌斯人、来自伊勒歌斯镇（或地区）外，我们就一无所知了。
+学者对于伊勒歌斯的所在有几种提议。有人将之与位于当今莫书珥（Mosul，译注∶位于底格里斯河左岸之城镇。）北方五十公里处的艾歌斯（al-Qosh）相联。此一观点是近期提出的，但并未得到多数学者支持，因为本书内文找不到可令人信服的证据支持此书源自亚述1。耶柔米（Jerome）则认为伊勒歌斯是北加利利的一个小镇，而该地区有一稍晚的传说，认为迦百农（“那鸿的村庄”）与那鸿有关联。较有可能的地点是犹大的伯迦百林（Beit-Jebrin）；提出此观点是因为北国以色列已经被掳，有效地排除了伊勒歌斯在以色列国内的可能，因为本书没有提及复兴之盼望的信息，表明本书不可能源于被掳的地区和时期2。
+1 A. S. van der Woude 在他的论文“那鸿书──被掳时期写成的信”（OTS 20, 1977, pp. 100～127）主张本书有亚述背景。
+2 Rudolph, p. 149. 他认为这名可能是 ~e{l qo^s%,（Qos%~ 神），与以东人的一个神祇有关。
+
+Ⅱ 时期
+
+【本章概述】
+那鸿书中没有提到明确的日期，但从内在的证据看来∶主前第七世纪中叶是较可能的日期。当时亚述帝国国势强大，这显示出日期应在尼尼微败落3（主前612年）之前；这败落是本书预言的要旨。亚述帝国的国势指出的日期是在亚述巴尼帕（Ashurbanipal, 主前668～627年）死前，他死后，亚述国在巴比伦兴起前已快速地衰退。
+本书最清楚的历史事件是底比斯（Thebes，现在的 Karnak 或 Luxor，在开罗上游约五百三十公里处；三章8节和合本译作“挪亚们”）的陷落；这座城虽求援于邻近城镇来抵御攻击者4，却仍于主前六六三年陷落于亚述。威尔浩生（Wellhausen）主张这段记载应在所描绘的事件发生后不久5。在这段时期，受残暴的亚述支配的犹大王是玛拿西（主前687∕6～672年）；而亚述之轭是在约西亚（主前640～609年）期间甩掉的。如果二章2节的事件在时间上是前瞻的，那么它们就可能发生在玛拿西时期；但若它们是反映一已成就的事件，就可能是在约西亚统治下写成的。相信亚述将会败落（就如本书预言所说的情况），因而导致玛拿西的背叛，时约主前六五二至六四八年间6（代下三十三14～16）。亚述（特别是尼尼微）的陷落是起因于邻国巴比伦和玛代在军事上结盟，这陷落始于主前六二七年亚述巴尼帕之死，而于主前六一二年尼尼微陷落时达到顶点7。有人为那鸿书提出晚于主前六一二年的日期，认为本书是针对尼尼微陷落所发出之敬拜仪文上的反应，但这提议并未得着很多支持。然而本书虽然没有敬拜礼拜上的起源，却很有可能在所预言的事件发生后用在敬拜礼拜上，用来昭彰耶和华的力量与公义。
+nbsp;
+3 ANET, p. 304页 . 关于亚述首都的讨论，见 D. J. Wiseman,
+'Nineveh', IBD,
+1089～1092.
+4 见ANET, p. 295,
+ii；J. Bright, A History of Israel
+(SCM Press / Westminster,
+31980), p. 311（布赖特，《以色列史》，基督教文艺出版社，1972，324页）。
+5 为 Maier 36页所引用。
+6 近来关于此日期的讨论，见 D. L. Christensen, 'The Acrostic of
+Nahum Reconsidered', ZAW 87 (1975), pp. 27～29，特别是29页关于这最后一点的讨论。
+7 见ANET, pp. 304～305；布赖特，《以色列史》，326～328页。
+
+Ⅲ 那鸿书与其结构
+
+【本章概述】
+那鸿书是“十二先知书”（或称小先知书）的第七卷，所有正典的传统都将它放在哈巴谷书之前、弥迦书之后，只有七十士译本例外，将它放在约拿书之后。
+这卷书是以默示的形式出现（一1），译成“默示”的希伯来文（mas*s*a{~）来自字根 ns*~；它以两种不同的意义出现在旧约圣经中。这两个不同的意义究竟来自一共同原文，或者两个不同的原文，但最终共有相同的字形，那就不清楚了。在一些例子中，该字根通常是指“举起、带着”，显然含有“重担、负担”的意思（如∶王下五17；代下三十五3；耶十七21）。这用法不仅引申为包括物质的携带，也包括任何一种“重任”（如∶民十一11；申一12）。有人建议说∶这个字用于一个默示（参 AV）之始，带有“负担”或重任的含义，通常是用于审判的默示。问题是∶这个字并非每一次都出现在论审判的上下文中（参∶亚十二1）。若将这个字解释成与专门意义“默示、宣告”为同音异义字，在预言性的上下文中将更为合适（参如∶结十二10；哈一1；亚九1；玛一1）。同一字形有两种不同意义可以解释耶利米书二十三33～38的双关语文字游戏8。
+本书的预言是关于逼迫者亚述的毁灭，与受压迫者犹大因此得着释放。表达这信息的文字形式与文体格式是多变的。头一段是一首描述赞美的诗篇或赞美神属性的诗歌（一2～8）。后面随着一幅法庭的景象，审判与释放的判决在此交替地分别论及亚述和犹大（一12～二2）。有对围城和争战生动的描述（二1、3～10，三2～3），以及一首挽歌或哀歌（三1）。在引伸的经文（二11～13，三4～7、15～17）与独立的经节（如一10、13，二7，三12、13）中，作者使用了暗喻和明喻。他也使用反讽（三1、14）。这些要素都是为了达到预言的目标，就是要导致人心改变。究竟听众是否为尼尼微是可怀疑的，因为整本旧约圣经只有一处预言记录是真正对以色列以外的人说的（拿三4）。那鸿书的预言可能是要鼓励犹大人，使他们相信压迫他们的暴政必要结束。
+本书主要的文学问题在于第一章的诗歌结构。问题关键在于离合诗的存在与其使用程度。离合诗是在每行之首依序使用字母的一种文学形式，这种形式的例子出现在诗篇（如一一九篇）与耶利米哀歌中。十九世纪首先有人提议∶那鸿书包含着一首离合诗，若非使用了全部字母，至少也包括了部分字母；这种看法现在已广泛被人接受9。然而，为了要呈现整套字母，大量经节必须重组，但这种重组通常没有抄本或版本的证据。较保守的建议是∶有一半的希伯来文字母（~-k）支配着一章2～8节的结构，然而甚至连这种保守的提议都需要修正十一行中的四行；但根据现在的行序，却丝毫没有不可理解之处。换句话说，改变经文位置的惟一动机，只是要使它适合经文所引起之理论上的循环论证而已。
+这类臆测式的修正所具有的主观性质，并非没有人批评，甚至连葛利史廷生（Christensen）所提议的较为保守的方法10都不乏批评者。如史密夫（J. M. P. Smith）所写的∶“用这类方法在修改经文，任何诗歌都能变成离合诗了”11。史密斯（G. A. Smith）则注意到∶“造出好的或诗歌体的希伯来文，并不能作为恢复原始经文最终的证明”12。就算原文真的很可能存在着一半，甚至是完整的离合诗，但我们却不能在现存的经文中找到这种看法。离合诗的存在与否，对于文学形式虽是重要，但是对于预言本身的意义和内容却不是如此。纵然离合诗的存在可以提供客观的证据，证明一章9节开始了一个新的段落；但无论如何，这也能从文法形式的改变而显示出来，因为一章2～8节乃是以第三人称来谈论关于神的事，一章9～11节则变为以第二人称对某人谈论关于神的事。
+nbsp;
+8 见 S. Erlandsson, The Burdon of Babylon:
+A Study of Isaiah 13:2～14:23 (CWK Gleerup, 1970), pp. 64～65; W.
+Mckane, 'Massa' in Jeremiah 23, 33～40, in J. A. Emerton (ed.), Prophecy:
+Essays Presented to George Fohrer on his Sixty-Fifth Birthday, 6 September,
+1980 (W. de Gruyter, 1980), pp. 35～54.
+9 见 Christensen, 'Acrostic of Nahum', pp. 17～19，描述了一九七五年以前的讨论历史。
+10 同上，pp. 21～22.
+11 J. M. P. Smith, p. 309.
+12 G. A. Smith, p. 82.
+
+Ⅳ 信息
+
+【本章概述】
+那鸿书的信息是关于神的属性，并祂与世人的关系（不仅是祂自己的百姓，甚至是那些不承认祂的人）。本书开头的诗歌（一2～8）标出了整个预言的背景。耶和华既有神的独一地位，就要求绝对的忠贞，祂也必严厉地对那些敌挡祂、逼迫祂子民的人施加报复（一2）。虽然祂有时延迟刑罚而显出祂的忍耐，祂却是公义的，祂的公义至终一定要得着满足，否则审判就必来临（一3）。连神自己的百姓，无论是以色列人或是教会，都不能免于审判。神所要的不是因神这一方在过去所成就（无论是在西乃山或加略山）而带来的地位或关系，而是要求人这一方持续以信靠与依赖来回应神（一7）。
+作者并非针对压迫者所造成的某些伤害，表达个人的感觉，要求昭雪，甚至也不是民族上盲目的爱国心，要异教徒的国家受到惩罚，而是耶和华使用祂普世的标准来敌挡邪恶，无论要对邪恶负起责任的是谁（参∶摩一3～二16）。虽然神曾拣选亚述成为祂的工具，来刑罚顽梗悖逆的以色列（赛七17，十5～6），祂却坚持此一国家必须为它在执行这任务时所犯的过度残暴负起责任（赛十7～19；参∶番二14～15）。
+可能有人会关切这点∶那鸿偏颇地、单方面地苛责外来的势力，却没有谴责自己百姓的邪恶。事实未必尽然。在某些先知的默示中（如以赛亚、何西阿），审判与盼望这两种信息是同时传讲的；在其他先知书中（如俄巴底亚、阿摩司），则仅提出审判或盼望两种信息之一，而实在将另一种信息排除在外。甚至在后者的例子中，神圆满的计划也是藉着当代另一位先知传讲另一面的信息。对那鸿的听众而言，审判的话语才刚由弥迦向他们传讲过；所以，他们自己的罪恶并非全然被忽略的。无论如何，那鸿指出神审判的公平。正像其他的书中一样，这里的刑罚总是与罪状相称。神并非随一时的兴致或喜好而反覆无常，祂乃是公正的（见一14，二1、7等）。
+神藉着那鸿所传的信息，乃是要鼓励祂的百姓。以色列人面对着曾征服尼罗河到底格里斯河广大区域、似乎无法抵挡之敌军的侵略，不能倚靠自己的势力，只能仰望神的拯救。然而，就在几年之内，那无敌者就被神的手所打败，没有一个国家能站在祂面前。教会面对着势力或意识形态的胁迫，也只能站在以色列同等的地位上，信靠那位“大有能力”的神（一3）。
+那鸿书大纲
+
+Ⅰ 标题（一1）
+
+Ａ 主题（一1a）
+
+Ｂ 形式（一1b）
+
+Ⅱ 颂耶和华之诗（一2～8）
+
+Ａ 神的属性（一2～3a）
+
+Ｂ 神的能力（一3b ～6）
+
+Ｃ 体现神的属性与能力（一7～8）
+
+Ⅲ 神人格化的忿怒（一9～11）
+
+Ⅳ 神的双重判决（一12～二2）
+
+Ａ 犹大∶压迫的结束（一12～13）
+
+Ｂ 亚述∶家系的结束（一14）
+
+Ｃ 犹大∶好消息（一15）
+
+Ｄ 亚述∶预备作战（二1）
+
+Ｅ 犹大∶从荒凉中复兴（二2）
+
+Ⅴ 争战的画像（二3～10）
+
+Ａ 攻击（二3～5）
+
+Ｂ 战败（二6～10）
+
+Ⅵ 亚述之狮被逐（二11～13）
+
+Ⅶ 祸哉尼尼微（三1～19）
+
+Ａ 祸哉（三1）
+
+Ｂ 战斗与死亡（三2～3）
+
+Ｃ 妓女的耻辱（三4～7）
+
+Ｄ 无敌的亚述？──讽刺诗（三8～17）
+
+【本章概述】
+i.坚城底比斯被毁（三8～10）
+ii.亚述的不够格（三11～13）
+iii.徒然的预备（三14～17）
+
+Ｅ 强者何竟败落（三18～19）

@@ -76,11 +76,15 @@ type Note = {
 
 type FeedbackStageKey = 'observe' | 'inquire' | 'reflect' | 'guided' | 'life';
 
-/** 灵修页经文下方的马唐纳内联注释（服务端本地 txt 直读下发） */
+/** 灵修页经文下方的本地内联注释（马唐纳 / 丁道尔，服务端本地 txt 直读下发） */
 type InlineCommentary = {
   enabled: boolean;
-  title: string;
-  items: { verse: number; header: string; text: string }[];
+  sources: {
+    id: string;
+    label: string;
+    title: string;
+    items: { verse: number; header: string; text: string }[];
+  }[];
 };
 
 type Detail = {
@@ -443,6 +447,52 @@ type StageProps = {
 
 // ---------- 经文（可折叠，长按写笔记） ----------
 
+/** 内联注释块：收起时只占一行圆点标记，点击展开看全文 */
+function InlineCommentaryBlock({
+  label,
+  header,
+  text,
+}: {
+  label: string;
+  header: string;
+  text: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div
+      className="mt-1.5 mb-1"
+      onPointerDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-1.5 rounded-lg bg-brand-50/60 px-2.5 py-1.5 text-left transition active:scale-[0.99]"
+        aria-expanded={open}
+      >
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-400" aria-hidden />
+        <span className="truncate text-[11.5px] font-medium text-brand-600">
+          {label}注 · {header}
+        </span>
+        <span className="ml-auto shrink-0 text-[10px] font-medium text-brand-400">
+          {open ? '收起' : '展开'}
+        </span>
+      </button>
+      {open && (
+        <div className="mt-1 space-y-1.5 rounded-lg border-l-2 border-brand-200 bg-brand-50/50 px-3 py-2 text-[12.5px] leading-relaxed text-muted">
+          {text
+            .split(/\n{2,}/)
+            .map((p) => p.trim())
+            .filter(Boolean)
+            .map((p) => (
+              <p key={p.slice(0, 40)}>{p}</p>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Passage({
   bookId,
   bookName,
@@ -489,10 +539,16 @@ function Passage({
     notesByVerse.set(n.verse, [...(notesByVerse.get(n.verse) ?? []), n]);
   }
 
-  // 马唐纳内联注释：按挂载节索引（一个分段只挂在其覆盖范围最前的节下）
-  const commentaryByVerse = new Map<number, InlineCommentary['items'][number]>();
+  // 本地内联注释：每个来源一张挂载表（一个分段只挂在其覆盖范围最前的节下）
+  const commentaryMaps = new Map<string, Map<number, { label: string; header: string; text: string }>>();
   if (commentary?.enabled) {
-    for (const item of commentary.items ?? []) commentaryByVerse.set(item.verse, item);
+    for (const src of commentary.sources ?? []) {
+      const m = new Map<number, { label: string; header: string; text: string }>();
+      for (const item of src.items ?? []) {
+        m.set(item.verse, { label: src.label, header: item.header, text: item.text });
+      }
+      commentaryMaps.set(src.id, m);
+    }
   }
   const textNoteCount = (notes ?? []).filter((n) => n.content?.trim()).length;
 
@@ -681,27 +737,19 @@ function Passage({
                     />
                     <VerseLongPressHint />
                   </p>
-                  {commentaryByVerse.get(v.verse) && (
-                    <div
-                      className="mt-1.5 mb-1 rounded-lg border-l-2 border-brand-200 bg-brand-50/50 px-3 py-2"
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onTouchStart={(e) => e.stopPropagation()}
-                    >
-                      <p className="text-[10px] font-bold tracking-wide text-brand-400">
-                        马唐纳注 · {commentaryByVerse.get(v.verse)!.header}
-                      </p>
-                      <div className="mt-1 space-y-1.5 text-[12.5px] leading-relaxed text-muted">
-                        {commentaryByVerse
-                          .get(v.verse)!
-                          .text.split(/\n{2,}/)
-                          .map((p) => p.trim())
-                          .filter(Boolean)
-                          .map((p) => (
-                            <p key={p.slice(0, 40)}>{p}</p>
-                          ))}
-                      </div>
-                    </div>
-                  )}
+                  {[...commentaryMaps.values()]
+                    .flatMap((m) => {
+                      const it = m.get(v.verse);
+                      return it ? [it] : [];
+                    })
+                    .map((it, i) => (
+                      <InlineCommentaryBlock
+                        key={`${it.label}-${i}`}
+                        label={it.label}
+                        header={it.header}
+                        text={it.text}
+                      />
+                    ))}
                   {verseNotes
                     .filter((n) => n.content || n.media_path)
                     .map((n) => (
