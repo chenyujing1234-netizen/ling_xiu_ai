@@ -32,7 +32,20 @@ export async function POST(req: Request) {
       await recordAttempt(phone, false);
       throw new HttpError(401, '手机号或密码不正确');
     };
-    if (!user) await fail();
+    if (!user) {
+      // 手机号密码都对、但申请还没审批：只有密码能对上才提示真实状态，
+      // 避免被人拿登录页探测"某个手机号是否提交过申请"
+      const pending = await db()
+        .prepare(
+          `SELECT password_hash FROM access_requests WHERE phone = ? AND status = 'pending' LIMIT 1`,
+        )
+        .get<{ password_hash: string }>(phone);
+      if (pending && verifyPassword(password, pending.password_hash)) {
+        await recordAttempt(phone, false);
+        throw new HttpError(403, '该手机号尚未通过审批，请等待管理员审核后再登录');
+      }
+      await fail();
+    }
     if (user!.status !== 'active') {
       await recordAttempt(phone, false);
       throw new HttpError(403, '账号已停用，请联系管理员');
@@ -59,7 +72,7 @@ export async function POST(req: Request) {
 
     const firstGuide = !row?.guide_seen;
     const lastPath = firstGuide
-      ? '/devotion'
+      ? '/devotion/start?book=1&chapter=1'
       : sanitizeLastPath(row?.last_path) ?? null;
     await setResumeCookie(lastPath);
 

@@ -4,6 +4,7 @@ import {
   elementsPrompt,
   contextPrompt,
   verseBackgroundPrompt,
+  chapterBackgroundPrompt,
   graphPrompt,
   mindmapPrompt,
   imagePromptFor,
@@ -342,6 +343,52 @@ export async function getVerseBackground(
               verseText,
               before: passageText(before, 'cn'),
               after: passageText(after, 'cn'),
+              knowledge: knowledgeCtx.knowledge,
+            }),
+          },
+        ],
+        { model: MODELS.fast(), maxTokens: 6000 },
+      );
+      return { data, ragSources: knowledgeCtx.ragSources };
+    },
+    force,
+  );
+}
+
+/** 整章历史与文化背景：经文资料页「圣经背景」页签用，结构同单节背景 */
+export async function getChapterBackground(
+  bookId: number,
+  chapter: number,
+  from = 1,
+  to = 0,
+  force = false,
+): Promise<InsightResult<VerseBackground>> {
+  const r = await resolveRange(bookId, chapter, from, to);
+  return cached<VerseBackground>(
+    r.key,
+    'chapter_background',
+    async () => {
+      if (!aiConfigured()) throw new Error('AI 未配置，无法生成圣经背景');
+      const book = await getBook(bookId);
+      const passageCn = passageText(r.verses, 'cn');
+      const knowledgeCtx = await knowledgeForVerseBackground({
+        ref: r.label,
+        bookName: book?.name_cn,
+        passage: passageCn,
+      });
+      const data = await chatJson<VerseBackground>(
+        [
+          {
+            role: 'system',
+            content: '你熟悉圣经历史地理与第二圣殿犹太处境，只输出 JSON。',
+          },
+          {
+            role: 'user',
+            content: chapterBackgroundPrompt({
+              ref: r.label,
+              bookName: book?.name_cn ?? '',
+              genre: r.genre,
+              passage: passageCn,
               knowledge: knowledgeCtx.knowledge,
             }),
           },

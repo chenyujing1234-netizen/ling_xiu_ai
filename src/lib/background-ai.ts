@@ -17,6 +17,7 @@ export function insightsAiLabel(kind: string): string {
     image: '意境配图',
     context: '上下文分析',
     background: '圣经背景',
+    chapter_background: '圣经背景',
     commentary: '圣经注释',
   };
   return map[kind] ?? '经文洞察';

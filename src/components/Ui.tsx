@@ -200,14 +200,17 @@ export function VerseCommentaryButton({
   onClick,
   disabled,
   className,
+  id,
 }: {
   onClick: () => void;
   disabled?: boolean;
   className?: string;
+  id?: string;
 }) {
   return (
     <button
       type="button"
+      id={id}
       disabled={disabled}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => {
@@ -222,46 +225,22 @@ export function VerseCommentaryButton({
   );
 }
 
-/** 经节旁：查看本节圣经背景 */
-export function VerseBackgroundButton({
-  onClick,
-  disabled,
-  className,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      className={`ml-1 inline-flex shrink-0 align-middle items-center rounded-md border border-line bg-surface/90 px-1.5 py-0.5 text-[10px] font-bold leading-none text-muted hover:text-brand-700 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40 ${className ?? ''}`}
-      aria-label="查看本节圣经背景"
-    >
-      背景
-    </button>
-  );
-}
-
 /** 经节旁：生成本节配图（需阻止冒泡，避免触发长按） */
 export function VerseImageButton({
   onClick,
   disabled,
   className,
+  id,
 }: {
   onClick: () => void;
   disabled?: boolean;
   className?: string;
+  id?: string;
 }) {
   return (
     <button
       type="button"
+      id={id}
       disabled={disabled}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => {
@@ -276,16 +255,27 @@ export function VerseImageButton({
   );
 }
 
-/** 经节末尾：提醒可长按记笔记（仅图标，不参与点击） */
-export function VerseLongPressHint({ className }: { className?: string }) {
+/** 经节末尾：「做笔记」按钮（点按直接打开笔记；长按经文的方式仍然保留） */
+export function VerseLongPressHint({
+  onClick,
+  className,
+}: {
+  onClick: () => void;
+  className?: string;
+}) {
   return (
-    <span
-      className={`pointer-events-none ml-1 inline-flex align-middle opacity-80 ${className ?? ''}`}
-      role="img"
-      aria-label="长按可记笔记"
+    <button
+      type="button"
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={`ml-1 inline-flex shrink-0 align-middle items-center rounded-md border border-brand-200/90 bg-brand-50/80 px-1.5 py-0.5 text-[10px] font-bold leading-none text-brand-700 active:scale-[0.97] ${className ?? ''}`}
+      aria-label="做笔记"
     >
-      <IconLongPress size={15} className="text-brand-400" />
-    </span>
+      做笔记
+    </button>
   );
 }
 

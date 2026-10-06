@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import DevotionHome, { type HomeTab } from '@/components/DevotionHome';
@@ -12,7 +12,6 @@ import {
   IconLongPress,
   IconScripture,
   NoteReviewedBadge,
-  VerseBackgroundButton,
   VerseCommentaryButton,
   VerseImageButton,
   VerseLongPressHint,
@@ -21,8 +20,8 @@ import { joinDictation } from '@/lib/dictate';
 import Dictate from './Dictate';
 import NoteSheet, { type NoteEdit, type VerseTarget } from './NoteSheet';
 import VerseImageSheet from './VerseImageSheet';
-import VerseBackgroundSheet from './VerseBackgroundSheet';
 import VerseCommentarySheet from './VerseCommentarySheet';
+import DevotionSpotlightTour, { type SpotlightStep } from './DevotionSpotlightTour';
 import PageBackButton from './PageBackButton';
 import SheetModal from './SheetModal';
 import ChapterNotesReviewBlock from './ChapterNotesReviewBlock';
@@ -127,9 +126,51 @@ type AdvanceResult = {
   feedbackSkipped?: boolean;
 };
 
-export default function DevotionFlow({ id }: { id: number }) {
+export default function DevotionFlow({
+  id,
+  showTour = false,
+  unlockScore = 40,
+}: {
+  id: number;
+  /** 新用户（guide_seen=0）首次进入灵修流程页时展示使用指引 */
+  showTour?: boolean;
+  unlockScore?: number;
+}) {
   const searchParams = useSearchParams();
   const flowTab: HomeTab = searchParams.get('tab') === 'explore' ? 'explore' : 'devotion';
+
+  /** 新用户流程页指引：欢迎 / 长按笔记 / 注释 / 配图 / 经文资料 */
+  const flowTourSteps = useMemo<SpotlightStep[]>(
+    () => [
+      {
+        targetId: 'lx-flow-tour-header',
+        title: '欢迎来到灵修',
+        body: `从创世记第 1 章开始你的第一次灵修：在同一页走完「观察→提问→默想」，写满后评估达到 ${unlockScore} 分即可完成。`,
+      },
+      {
+        targetId: 'lx-flow-tour-longpress',
+        title: '长按做笔记',
+        body: '对哪一节有感动？长按那一节，可口述或写文字笔记，把领受存下来。',
+      },
+      {
+        targetId: 'lx-flow-tour-commentary',
+        title: '查看注释',
+        body: '读不懂的一节，点旁边的「注释」，直接看马唐纳、丁道尔的原文讲解。',
+      },
+      {
+        targetId: 'lx-flow-tour-image',
+        title: '生成图片',
+        body: '点「配图」为这一节生成一幅意境画面，帮助默想与记忆。',
+      },
+      {
+        targetId: 'lx-tour-tab-explore',
+        title: '经文资料',
+        prepare: () => document.getElementById('lx-tour-tab-explore')?.click(),
+        body: '另一个页签可查整章的圣经背景、要素梳理、思维导图。现在，开始你的第一次灵修吧。',
+      },
+    ],
+    [unlockScore],
+  );
   const [d, setD] = useState<Detail | null>(null);
   /** 已完成灵修：默认看完成总结，可切回与当时相同的默想页回看笔记 */
   const [doneReviewOpen, setDoneReviewOpen] = useState(false);
@@ -335,7 +376,7 @@ export default function DevotionFlow({ id }: { id: number }) {
 
       <DevotionHome initialTab={flowTab} devotionLabel="灵修" explore={explorePanel}>
         <>
-          <header className="sticky top-11 z-30 border-b border-line bg-paper/95 px-4 py-3 backdrop-blur">
+          <header id="lx-flow-tour-header" className="sticky top-11 z-30 border-b border-line bg-paper/95 px-4 py-3 backdrop-blur">
             <div className="flex items-center gap-2">
               <PageBackButton fallback="/devotion" />
               <button
@@ -427,6 +468,15 @@ export default function DevotionFlow({ id }: { id: number }) {
           </div>
         </>
       </DevotionHome>
+
+      {isCombinedDevotionUi(stage as DevotionStage) && (
+        <DevotionSpotlightTour
+          show={showTour}
+          unlockScore={unlockScore}
+          steps={flowTourSteps}
+          onFinish={() => document.getElementById('lx-tour-tab-devotion')?.click()}
+        />
+      )}
     </div>
   );
 }
@@ -526,7 +576,6 @@ function Passage({
   const [open, setOpen] = useState(true);
   const [target, setTarget] = useState<VerseTarget | null>(null);
   const [imageTarget, setImageTarget] = useState<VerseTarget | null>(null);
-  const [backgroundTarget, setBackgroundTarget] = useState<VerseTarget | null>(null);
   const [commentaryTarget, setCommentaryTarget] = useState<VerseTarget | null>(null);
   const [editing, setEditing] = useState<NoteEdit | null>(null);
   const [pressing, setPressing] = useState<number | null>(null);
@@ -626,6 +675,7 @@ function Passage({
       {open && (
         <>
           <div
+            id="lx-flow-tour-longpress"
             className={`mx-4 overflow-hidden transition-all duration-200 ease-out ${
               compactHint ? 'mb-0 max-h-0 opacity-0' : 'mb-2 max-h-24 opacity-100'
             }`}
@@ -656,7 +706,7 @@ function Passage({
               emphasis ? undefined : (e) => onVerseScroll?.(e.currentTarget.scrollTop)
             }
           >
-            {verses.map((v) => {
+            {verses.map((v, vi) => {
               const verseNotes = notesByVerse.get(v.verse) ?? [];
               return (
                 <div
@@ -699,19 +749,8 @@ function Passage({
                         )}
                       </span>
                     )}
-                    <VerseBackgroundButton
-                      onClick={() =>
-                        setBackgroundTarget({
-                          bookId,
-                          bookName,
-                          chapter,
-                          verse: v.verse,
-                          cn: v.cn,
-                          en: v.en ?? '',
-                        })
-                      }
-                    />
                     <VerseCommentaryButton
+                      id={vi === 0 ? 'lx-flow-tour-commentary' : undefined}
                       onClick={() =>
                         setCommentaryTarget({
                           bookId,
@@ -724,6 +763,7 @@ function Passage({
                       }
                     />
                     <VerseImageButton
+                      id={vi === 0 ? 'lx-flow-tour-image' : undefined}
                       onClick={() =>
                         setImageTarget({
                           bookId,
@@ -735,7 +775,19 @@ function Passage({
                         })
                       }
                     />
-                    <VerseLongPressHint />
+                    <VerseLongPressHint
+                      onClick={() => {
+                        setEditing(null);
+                        setTarget({
+                          bookId,
+                          bookName,
+                          chapter,
+                          verse: v.verse,
+                          cn: v.cn,
+                          en: v.en ?? '',
+                        });
+                      }}
+                    />
                   </p>
                   {[...commentaryMaps.values()]
                     .flatMap((m) => {
@@ -819,14 +871,6 @@ function Passage({
           target={imageTarget}
           onClose={() => setImageTarget(null)}
           onReopen={(t) => setImageTarget(t)}
-        />
-      )}
-
-      {backgroundTarget && (
-        <VerseBackgroundSheet
-          target={backgroundTarget}
-          onClose={() => setBackgroundTarget(null)}
-          onReopen={(t) => setBackgroundTarget(t)}
         />
       )}
 

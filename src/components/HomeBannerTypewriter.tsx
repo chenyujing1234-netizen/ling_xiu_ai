@@ -32,6 +32,20 @@ const SCRIPTS: Part[][] = [
     { text: '的那一份' },
     { text: '亮光', highlight: true },
   ],
+  [
+    { text: '难懂的一节？点开' },
+    { text: '注释', highlight: true },
+    { text: '，看' },
+    { text: '马唐纳、丁道尔', highlight: true },
+    { text: '怎么讲' },
+  ],
+  [
+    { text: '这一章发生在什么年代？' },
+    { text: '圣经背景', highlight: true },
+    { text: '与' },
+    { text: '思维导图', highlight: true },
+    { text: '，读进当时、读出脉络' },
+  ],
 ];
 
 const TYPING_MS = 58;

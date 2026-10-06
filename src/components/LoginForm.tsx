@@ -21,11 +21,15 @@ export default function LoginForm() {
         json: { phone, password },
       });
       const next = params.get('next');
+      // 新用户引导：服务端会返回 /devotion/start?book=1&chapter=1，直接进创世记 1 章的灵修
+      const firstGuidePath = res.lastPath?.startsWith('/devotion/start') ? res.lastPath : null;
       const dest = res.mustChangePw
         ? '/me/password?first=1'
-        : res.lastPath === '/devotion'
-          ? '/devotion'
-          : sanitizeLastPath(next) || res.lastPath || '/';
+        : firstGuidePath
+          ? firstGuidePath
+          : res.lastPath === '/devotion'
+            ? '/devotion'
+            : sanitizeLastPath(next) || res.lastPath || '/';
       hardNavigate(dest);
     } catch (err) {
       setError((err as Error).message);

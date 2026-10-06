@@ -10,6 +10,7 @@ import RagSourcesFootnote from './RagSourcesFootnote';
 import ImageStylePicker, { usePreferredImageStyle } from './ImageStylePicker';
 import { useBackgroundJobs } from './BackgroundJobsProvider';
 import { insightsAiLabel } from '@/lib/background-ai';
+import type { VerseBackground } from '@/lib/insights';
 import type { RagSource } from '@/lib/rag-sources';
 
 type Elements = {
@@ -37,10 +38,11 @@ type Resource = {
   note: string | null;
 };
 
-type Tab = 'elements' | 'graph' | 'mindmap' | 'image' | 'sermon';
+type Tab = 'elements' | 'background' | 'graph' | 'mindmap' | 'image' | 'sermon';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'elements', label: '要素梳理' },
+  { key: 'background', label: '圣经背景' },
   { key: 'graph', label: '知识图谱' },
   { key: 'mindmap', label: '思维导图' },
   { key: 'image', label: '意境配图' },
@@ -118,14 +120,14 @@ export default function ExploreView({
           </select>
         </div>
 
-        {/* 五个页签要在 390px 的窄屏上一排放下，不然"讲道视频"会被切掉半个，
+        {/* 六个页签要在 390px 的窄屏上一排放下，不然"讲道视频"会被切掉半个，
             没人知道右边还能滑 */}
         <div className="mt-2 flex gap-1 overflow-x-auto no-bar">
           {TABS.map((t) => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`shrink-0 rounded-lg px-2 py-1.5 text-xs transition ${
+              className={`shrink-0 rounded-lg px-1.5 py-1.5 text-xs transition ${
                 tab === t.key ? 'bg-brand-500 font-medium text-white' : 'border border-line text-muted'
               }`}
             >
@@ -137,6 +139,7 @@ export default function ExploreView({
 
       <div className="px-4 py-4">
         {tab === 'elements' && <ElementsPanel book={book} chapter={chapter} label={label} />}
+        {tab === 'background' && <BackgroundPanel book={book} chapter={chapter} label={label} />}
         {tab === 'graph' && <GraphPanel book={book} chapter={chapter} label={label} />}
         {tab === 'mindmap' && <MindmapPanel book={book} chapter={chapter} label={label} />}
         {tab === 'image' && <ImagePanel book={book} chapter={chapter} label={label} />}
@@ -438,6 +441,41 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
       <p className="label mb-2">{title}</p>
       {children}
     </section>
+  );
+}
+
+// ---------- 圣经背景（整章） ----------
+
+const BACKGROUND_SECTIONS: { key: keyof VerseBackground; title: string }[] = [
+  { key: 'era', title: '时代与处境' },
+  { key: 'place_people', title: '地点与人物' },
+  { key: 'custom', title: '习俗与制度' },
+  { key: 'parallel', title: '同期可参考' },
+  { key: 'for_verse', title: '如何帮助读这一章' },
+];
+
+function BackgroundPanel({ book, chapter, label }: { book: number; chapter: number; label: string }) {
+  return (
+    <LazyPanel<VerseBackground>
+      kind="chapter_background"
+      book={book}
+      chapter={chapter}
+      actionLabel="生成本章圣经背景"
+      hint="由 AI 结合固定历史类书库（犹太古史、教会史等）整理这一章的时代、地点人物、习俗与同期事件，供读经时参考；若与教会传统理解有出入，请以经文与教牧指导为准。"
+    >
+      {(bg) => (
+        <div className="space-y-3">
+          {BACKGROUND_SECTIONS.map(({ key, title }) =>
+            bg[key]?.trim() ? (
+              <Card key={key} title={title}>
+                <p className="text-[14px] leading-relaxed">{bg[key]}</p>
+              </Card>
+            ) : null,
+          )}
+          <p className="pt-1 text-center text-xs text-muted">{label} · 结果已缓存，再看不额外消耗</p>
+        </div>
+      )}
+    </LazyPanel>
   );
 }
 

@@ -11,7 +11,6 @@ import SubpageBackBar from '@/components/SubpageBackBar';
 import ThemeSync from '@/components/ThemeSync';
 import { normalizeFontScale } from '@/lib/font-scale';
 import { BackgroundJobsProvider } from '@/components/BackgroundJobsProvider';
-import HomeExitConfirm from '@/components/HomeExitConfirm';
 import { normalizeTheme } from '@/lib/themes';
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
@@ -40,7 +39,6 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         {children}
       </main>
       <BottomTab />
-      <HomeExitConfirm />
     </AdminPendingProvider>
     </BackgroundJobsProvider>
   );

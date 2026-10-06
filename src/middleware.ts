@@ -10,7 +10,7 @@ const RESUME_COOKIE = 'lx_resume';
 // 用户是否被停用由 getSession() 在 Node 侧二次校验。
 
 const PUBLIC_PATHS = ['/login', '/apply'];
-const PUBLIC_APIS = ['/api/auth/login', '/api/auth/apply'];
+const PUBLIC_APIS = ['/api/auth/login', '/api/auth/apply', '/api/auth/sms-code'];
 
 const CHANGE_PW_PATH = '/me/password';
 

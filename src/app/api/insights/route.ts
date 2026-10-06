@@ -4,6 +4,7 @@ import {
   getElements,
   getContextInsight,
   getVerseBackground,
+  getChapterBackground,
   getVerseCommentary,
   getGraph,
   getMindmap,
@@ -109,6 +110,10 @@ export async function GET(req: Request) {
           lockedHint: `要义与反思需要你先在灵修中写下自己的思考（评估达 ${UNLOCK_SCORE()} 分）后揭晓`,
           ragSources: el.ragSources,
         };
+      }
+      case 'chapter_background': {
+        const cb = await getChapterBackground(bookId, chapter, from, to, force);
+        return { kind, data: cb.data, ragSources: cb.ragSources };
       }
       case 'graph': {
         const g = await getGraph(bookId, chapter, from, to, force);

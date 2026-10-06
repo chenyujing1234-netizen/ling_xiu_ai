@@ -276,3 +276,17 @@ CREATE TABLE IF NOT EXISTS knowledge_docs (
   tags       VARCHAR(200) NULL,
   created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ========== 申请页短信验证码 ==========
+-- 60 秒重发冷却、每天每号 10 条由接口层控制；这里只管存码与校验。
+-- code_hash = sha256('phone:code')，不存明文；验证通过或过期后 consumed 置 1。
+CREATE TABLE IF NOT EXISTS sms_codes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  phone VARCHAR(20) NOT NULL,
+  code_hash CHAR(64) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  attempts INT NOT NULL DEFAULT 0,
+  consumed TINYINT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_sms_codes_phone (phone)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

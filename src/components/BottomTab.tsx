@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, type MouseEvent } from 'react';
 import { useAdminPending } from './AdminPendingProvider';
 
 // R-G1：三个底部 Tab。图标用内联 SVG，避免图标库拖慢首屏。
@@ -15,9 +16,39 @@ const TABS = [
   { href: '/me', label: '我的', icon: IconUser },
 ];
 
+/** 「灵修」Tab 最后停留的位置（列表页 /devotion 或某一章的灵修页 /devotion/N） */
+export const DEVOTION_TAB_KEY = 'lxDevotionTabPath';
+
 export default function BottomTab() {
   const pathname = usePathname();
+  const router = useRouter();
   const { pending: adminPending } = useAdminPending();
+
+  // 离开灵修去别的 Tab 时记下当时的灵修页，切回来时原样恢复，
+  // 而不是总落回列表页（比如正在创世记 1 章默想，去「今日」看一眼再回来）
+  useEffect(() => {
+    if (pathname === '/devotion' || /^\/devotion\/\d+/.test(pathname)) {
+      try {
+        sessionStorage.setItem(DEVOTION_TAB_KEY, pathname);
+      } catch {
+        /* 隐私模式等写不进就算了，退化为进列表页 */
+      }
+    }
+  }, [pathname]);
+
+  function onDevotionClick(e: MouseEvent<HTMLAnchorElement>) {
+    let saved: string | null = null;
+    try {
+      saved = sessionStorage.getItem(DEVOTION_TAB_KEY);
+    } catch {
+      saved = null;
+    }
+    if (saved && saved !== pathname) {
+      e.preventDefault();
+      router.push(saved);
+    }
+    // 没有记录、或正停在记录页上：走 Link 默认行为去 /devotion 列表
+  }
 
   return (
     <nav
@@ -32,6 +63,7 @@ export default function BottomTab() {
             <li key={tab.href} className="flex-1">
               <Link
                 href={tab.href}
+                onClick={tab.href === '/devotion' ? onDevotionClick : undefined}
                 className="flex h-[56px] flex-col items-center justify-center gap-0.5 active:opacity-60"
                 aria-current={active ? 'page' : undefined}
               >

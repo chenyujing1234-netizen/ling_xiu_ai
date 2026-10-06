@@ -1,17 +1,52 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import AuthHeroImage from '@/components/AuthHeroImage';
 import { api } from '@/lib/client';
 
+const PHONE_RE = /^1\d{10}$/;
+
 export default function ApplyPage() {
-  const [form, setForm] = useState({ phone: '', password: '', note: '' });
+  const [form, setForm] = useState({ phone: '', password: '', smsCode: '', note: '' });
   const [state, setState] = useState<'idle' | 'busy' | 'done'>('idle');
   const [error, setError] = useState('');
+  const [sending, setSending] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => () => {
+    if (timer.current) clearInterval(timer.current);
+  }, []);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm({ ...form, [k]: e.target.value });
+
+  async function sendCode() {
+    setError('');
+    if (!PHONE_RE.test(form.phone)) {
+      setError('请先填写正确的 11 位手机号');
+      return;
+    }
+    setSending(true);
+    try {
+      await api('/api/auth/sms-code', { json: { phone: form.phone } });
+      setCountdown(60);
+      timer.current = setInterval(() => {
+        setCountdown((c) => {
+          if (c <= 1) {
+            if (timer.current) clearInterval(timer.current);
+            return 0;
+          }
+          return c - 1;
+        });
+      }, 1000);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSending(false);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -20,10 +55,19 @@ export default function ApplyPage() {
       setError('登录密码至少 6 位');
       return;
     }
+    if (!/^\d{6}$/.test(form.smsCode)) {
+      setError('请填写收到的 6 位短信验证码');
+      return;
+    }
     setState('busy');
     try {
       await api('/api/auth/apply', {
-        json: { phone: form.phone, password: form.password, note: form.note || undefined },
+        json: {
+          phone: form.phone,
+          password: form.password,
+          smsCode: form.smsCode,
+          note: form.note || undefined,
+        },
       });
       setState('done');
     } catch (err) {
@@ -75,6 +119,27 @@ export default function ApplyPage() {
           onChange={set('phone')}
           required
         />
+        <div className="flex gap-2">
+          <input
+            className="field flex-1"
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            placeholder="短信验证码"
+            value={form.smsCode}
+            onChange={set('smsCode')}
+            required
+          />
+          <button
+            type="button"
+            className="btn-ghost shrink-0 px-4 text-sm disabled:opacity-50"
+            disabled={sending || countdown > 0 || !PHONE_RE.test(form.phone)}
+            onClick={sendCode}
+          >
+            {countdown > 0 ? `${countdown}s` : sending ? '发送中…' : '获取验证码'}
+          </button>
+        </div>
         <input
           className="field"
           type="text"

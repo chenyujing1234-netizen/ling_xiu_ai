@@ -1,17 +1,38 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const HOME_EXIT_STATE = { lxHomeExit: 1 as const };
+// 每个实例用自己的 pattern 当哨兵标记：两个实例（首页/灵修页）同时挂载时，
+// 卸载清理只弹回自己压入的哨兵，不会误碰另一个实例刚压入的那层
+function exitState(pattern: string) {
+  return { lxExitConfirm: pattern };
+}
 
 /**
- * 首页（今日 Tab）：系统/手机返回先二次确认，避免误触退出。
- * 与浮层 history（lxOverlay）配合：关浮层后的 pop 仍带 lxHomeExit，不会误弹退出框。
+ * 指定页面：系统/手机返回先二次确认，避免误触退出。
+ * 与浮层 history（lxOverlay）配合：关浮层后的 pop 仍带 lxExitConfirm，不会误弹退出框。
+ * pattern：pathname 正则（首页 '^/$'，灵修页 '^/devotion/\\d+'）。
+ * leaveTo：确认离开后前往的路由（如灵修页回首页）；缺省 history.back()（首页返回即离开站点）。
  */
-export default function HomeExitConfirm() {
+export default function ExitConfirm({
+  pattern,
+  title,
+  desc,
+  confirmLabel = '离开',
+  cancelLabel = '留下',
+  leaveTo,
+}: {
+  pattern: string;
+  title: string;
+  desc: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  leaveTo?: string;
+}) {
   const pathname = usePathname();
-  const active = pathname === '/';
+  const router = useRouter();
+  const active = new RegExp(pattern).test(pathname);
   const [open, setOpen] = useState(false);
   const openRef = useRef(open);
   openRef.current = open;
@@ -20,10 +41,10 @@ export default function HomeExitConfirm() {
 
   const armTrap = useCallback(() => {
     if (!active || allowLeaveRef.current) return;
-    if (history.state?.lxHomeExit === 1) return;
+    if (history.state?.lxExitConfirm === pattern) return;
     pushedRef.current = true;
-    history.pushState(HOME_EXIT_STATE, '');
-  }, [active]);
+    history.pushState(exitState(pattern), '');
+  }, [active, pattern]);
 
   useEffect(() => {
     if (!active) {
@@ -36,19 +57,20 @@ export default function HomeExitConfirm() {
 
     const onPop = () => {
       if (allowLeaveRef.current) return;
-      if (window.location.pathname !== '/') return;
+      if (!new RegExp(pattern).test(window.location.pathname)) return;
 
-      if (history.state?.lxHomeExit === 1) {
+      // 关浮层（lxOverlay）后落回本页的 trap：直接吃掉，不弹确认
+      if (history.state?.lxExitConfirm === pattern) {
         return;
       }
 
       if (openRef.current) {
         setOpen(false);
-        history.pushState(HOME_EXIT_STATE, '');
+        history.pushState(exitState(pattern), '');
         return;
       }
 
-      history.pushState(HOME_EXIT_STATE, '');
+      history.pushState(exitState(pattern), '');
       setOpen(true);
     };
 
@@ -58,11 +80,11 @@ export default function HomeExitConfirm() {
       if (pushedRef.current && !allowLeaveRef.current) {
         pushedRef.current = false;
         window.setTimeout(() => {
-          if (history.state?.lxHomeExit === 1) history.back();
+          if (history.state?.lxExitConfirm === pattern) history.back();
         }, 0);
       }
     };
-  }, [active, armTrap]);
+  }, [active, armTrap, pattern]);
 
   const cancel = useCallback(() => {
     setOpen(false);
@@ -71,8 +93,9 @@ export default function HomeExitConfirm() {
   const confirmLeave = useCallback(() => {
     allowLeaveRef.current = true;
     setOpen(false);
-    history.back();
-  }, []);
+    if (leaveTo) router.push(leaveTo);
+    else history.back();
+  }, [leaveTo, router]);
 
   if (!active || !open) return null;
 
@@ -81,15 +104,15 @@ export default function HomeExitConfirm() {
       className="fixed inset-0 z-[250] flex items-center justify-center bg-black/40 p-6 fade-in"
       role="alertdialog"
       aria-modal="true"
-      aria-labelledby="home-exit-title"
-      aria-describedby="home-exit-desc"
+      aria-labelledby="exit-confirm-title"
+      aria-describedby="exit-confirm-desc"
     >
       <div className="card w-full max-w-sm px-5 py-5 shadow-sheet">
-        <h2 id="home-exit-title" className="text-[17px] font-bold text-brand-700">
-          要离开晨光吗？
+        <h2 id="exit-confirm-title" className="text-[17px] font-bold text-brand-700">
+          {title}
         </h2>
-        <p id="home-exit-desc" className="mt-2 text-sm leading-relaxed text-muted">
-          再按一次返回将离开当前页面。若只是想切换功能，请用底部 Tab。
+        <p id="exit-confirm-desc" className="mt-2 text-sm leading-relaxed text-muted">
+          {desc}
         </p>
         <div className="mt-5 flex gap-2.5">
           <button
@@ -97,14 +120,14 @@ export default function HomeExitConfirm() {
             onClick={cancel}
             className="flex-1 rounded-xl border border-line bg-card py-3 text-[15px] font-semibold text-ink active:bg-brand-50"
           >
-            留下
+            {cancelLabel}
           </button>
           <button
             type="button"
             onClick={confirmLeave}
             className="flex-1 rounded-xl bg-brand-600 py-3 text-[15px] font-bold text-white shadow-glow active:opacity-90"
           >
-            离开
+            {confirmLabel}
           </button>
         </div>
       </div>

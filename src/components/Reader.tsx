@@ -5,13 +5,11 @@ import Link from 'next/link';
 import { api } from '@/lib/client';
 import NoteSheet, { type NoteEdit, type VerseTarget } from './NoteSheet';
 import VerseImageSheet from './VerseImageSheet';
-import VerseBackgroundSheet from './VerseBackgroundSheet';
 import VerseCommentarySheet from './VerseCommentarySheet';
 import SceneImageBar from './SceneImageBar';
 import BookPicker, { type BookBrief } from './BookPicker';
 import {
   NoteReviewedBadge,
-  VerseBackgroundButton,
   VerseCommentaryButton,
   VerseImageButton,
   VerseLongPressHint,
@@ -66,7 +64,6 @@ export default function Reader({
   const [bilingual, setBilingual] = useState(false);
   const [target, setTarget] = useState<VerseTarget | null>(null);
   const [imageTarget, setImageTarget] = useState<VerseTarget | null>(null);
-  const [backgroundTarget, setBackgroundTarget] = useState<VerseTarget | null>(null);
   const [commentaryTarget, setCommentaryTarget] = useState<VerseTarget | null>(null);
   const [editing, setEditing] = useState<NoteEdit | null>(null);
   const [pressing, setPressing] = useState<number | null>(null);
@@ -302,18 +299,6 @@ export default function Reader({
                     )}
                     {!picking && (
                       <>
-                        <VerseBackgroundButton
-                          onClick={() =>
-                            setBackgroundTarget({
-                              bookId: data.book.id,
-                              bookName: data.book.name_cn,
-                              chapter: data.chapter,
-                              verse: v.verse,
-                              cn: v.cn,
-                              en: v.en,
-                            })
-                          }
-                        />
                         <VerseCommentaryButton
                           onClick={() =>
                             setCommentaryTarget({
@@ -338,7 +323,19 @@ export default function Reader({
                             })
                           }
                         />
-                        <VerseLongPressHint />
+                        <VerseLongPressHint
+                          onClick={() => {
+                            setEditing(null);
+                            setTarget({
+                              bookId: data.book.id,
+                              bookName: data.book.name_cn,
+                              chapter: data.chapter,
+                              verse: v.verse,
+                              cn: v.cn,
+                              en: v.en,
+                            });
+                          }}
+                        />
                       </>
                     )}
                   </p>
@@ -486,14 +483,6 @@ export default function Reader({
           target={imageTarget}
           onClose={() => setImageTarget(null)}
           onReopen={(t) => setImageTarget(t)}
-        />
-      )}
-
-      {backgroundTarget && (
-        <VerseBackgroundSheet
-          target={backgroundTarget}
-          onClose={() => setBackgroundTarget(null)}
-          onReopen={(t) => setBackgroundTarget(t)}
         />
       )}
 

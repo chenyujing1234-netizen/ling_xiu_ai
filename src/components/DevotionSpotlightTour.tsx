@@ -12,6 +12,8 @@ type Step = {
   prepare?: () => void;
 };
 
+export type SpotlightStep = Step;
+
 const PAD = 10;
 const TOOLTIP_GAP = 12;
 
@@ -25,16 +27,22 @@ function measure(id: string): DOMRect | null {
 export default function DevotionSpotlightTour({
   show,
   unlockScore,
+  steps: stepsProp,
+  onFinish,
 }: {
   show: boolean;
   unlockScore: number;
+  /** 自定义引导步骤（如灵修流程页）；缺省为灵修列表页的四步 */
+  steps?: Step[];
+  /** 引导结束/跳过后回调（如流程页切回「灵修」页签） */
+  onFinish?: () => void;
 }) {
   const [open, setOpen] = useState(show);
   const [step, setStep] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const finishingRef = useRef(false);
 
-  const steps = useMemo<Step[]>(
+  const listSteps = useMemo<Step[]>(
     () => [
       {
         targetId: 'lx-tour-tab-devotion',
@@ -56,11 +64,13 @@ export default function DevotionSpotlightTour({
         targetId: 'lx-tour-explore-header',
         title: '选书选章',
         prepare: () => document.getElementById('lx-tour-tab-explore')?.click(),
-        body: '在这里切换经卷与章。进入灵修后，经节旁还有「背景」「注释」「配图」；长按经节可记笔记。',
+        body: '在这里切换经卷与章，也可以看整章的「圣经背景」。进入灵修后，经节旁还有「注释」「配图」；长按经节可记笔记。',
       },
     ],
     [unlockScore],
   );
+
+  const steps = stepsProp ?? listSteps;
 
   const finish = useCallback(async () => {
     if (finishingRef.current) return;
@@ -71,7 +81,8 @@ export default function DevotionSpotlightTour({
     } catch {
       /* 下次可再显示 */
     }
-  }, []);
+    onFinish?.();
+  }, [onFinish]);
 
   useEffect(() => {
     setOpen(show);
